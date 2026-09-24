@@ -1,0 +1,7 @@
+// Drag this file into the Maya viewport to activate MCP without restarting Maya.
+global proc MayaMCP_dragInstall() {
+    string $info = `whatIs MayaMCP_dragInstall`;
+    optionVar -sv "MayaMCP_dragInfo" $info;
+    python("import os, re, runpy\nimport maya.cmds as cmds\ninfo = cmds.optionVar(q='MayaMCP_dragInfo') or ''\nmatch = re.search(r'found in:\\s*(.+)$', info)\nif not match: raise RuntimeError('Cannot locate install_maya_mcp.mel: ' + info)\nroot = os.path.dirname(match.group(1).strip().strip(chr(34)))\nrunpy.run_path(os.path.join(root, 'scripts', 'activate_maya_mcp.py'), run_name='__main__')");
+}
+MayaMCP_dragInstall();

@@ -1,0 +1,47 @@
+# Maya Agent
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+.venv/
+venv/
+.env
+*.log
+.idea/
+.vscode/
+*.pyc
+.DS_Store
+Thumbs.db
+
+# Local Maya MCP dependencies, credentials and installation paths
+.venv-mcp/
+.maya-mcp-deps/
+.maya-mcp-runtime.json
+.pytest_cache/
+.env.*
+connection.json
+*.pem
+*.key
+
+# User scenes, captures, backups and generated reports
+outputs/
+*.ma
+*.mb
+*.mayaagent.json
+*.bak
+
+# Local one-off scene reconstruction and UI study scripts
+scripts/capture_spine_blueprint.py
+scripts/create_jumping_box.py
+scripts/frame_jumping_box.py
+scripts/inspect_current_maya_scene.py
+scripts/package_custom_body_template.py
+scripts/rebuild_spine_from_blueprint.py
+scripts/run_scene_inspection.py
+scripts/run_spine_capture.py
+scripts/run_spine_rebuild.py
+scripts/save_rebuilt_spine.py
+scripts/validate_rebuilt_spine.py
+scripts/verify_maya_agent_ui.py
