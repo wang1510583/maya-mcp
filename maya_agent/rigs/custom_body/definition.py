@@ -5,22 +5,22 @@ import re
 import math
 
 DISPLAY_NAME = "自定义身体绑定"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 DATA_PATH = Path(__file__).parent / "data" / "body_v1.json"
-RECIPE_PATH = DATA_PATH.with_name("body_v2.json")
+RECIPE_PATH = DATA_PATH.with_name("body_v3.json")
 COMPONENT_ORDER = ("controls", "skeleton", "drivers", "display")
 
 
-def load_definition(segment_count=4, height=6.0):
+def load_definition(segment_count=4, height=6.0, preserve_four=True):
     from .topology import compile_definition
     validate_dimensions(segment_count, height)
     recipe = json.loads(RECIPE_PATH.read_text(encoding="utf-8"))
-    if recipe["schema_version"] != 2 or recipe["version"] != VERSION:
+    if recipe["schema_version"] != 3 or recipe["version"] != VERSION:
         raise ValueError("Unsupported custom body rig recipe version")
     data = json.loads(DATA_PATH.read_text(encoding="utf-8"))
     if data["schema_version"] != 1 or data["version"] != "1.0.0":
         raise ValueError("Unsupported custom body rig template version")
-    data = compile_definition(data, segment_count, height, VERSION)
+    data = compile_definition(data, segment_count, height, VERSION, preserve_four=preserve_four)
     names = [node["name"] for node in data["nodes"]]
     if len(names) != len(set(names)):
         raise ValueError("Duplicate template node names")

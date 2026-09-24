@@ -6,10 +6,10 @@ Four controls retain the original graph, names, shapes and rounded slide weights
 from copy import deepcopy
 
 
-def compile_definition(base, segment_count, height, version):
+def compile_definition(base, segment_count, height, version, preserve_four=True):
     data = deepcopy(base)
     data.update(version=version, segment_count=segment_count, height=float(height))
-    if segment_count == 4:
+    if segment_count == 4 and preserve_four:
         # Preserve the complete v1 graph, including 0.333 / 0.667 weights.
         factor = height / 6.0
         for row in data["nodes"]:

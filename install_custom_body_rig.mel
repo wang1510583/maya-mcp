@@ -1,0 +1,7 @@
+// Drag into the Maya viewport to open the standalone custom-body rig UI.
+global proc CustomBodyRig_dragInstall() {
+    string $info = `whatIs CustomBodyRig_dragInstall`;
+    optionVar -sv "CustomBodyRig_dragInfo" $info;
+    python("import os, re, runpy\nimport maya.cmds as cmds\ninfo = cmds.optionVar(q='CustomBodyRig_dragInfo') or ''\nmatch = re.search(r'found in:\\s*(.+)$', info)\nif not match: raise RuntimeError('Cannot locate install_custom_body_rig.mel: ' + info)\nroot = os.path.dirname(match.group(1).strip().strip(chr(34)))\nrunpy.run_path(os.path.join(root, 'install_custom_body_rig.py'), run_name='__main__')");
+}
+CustomBodyRig_dragInstall();

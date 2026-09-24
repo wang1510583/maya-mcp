@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "outputs" / "github-publish"
 DIRECTORIES = ("maya_agent", "maya_mcp", "scripts", "tests_mcp", "resources", "config", "docs")
 ROOT_FILES = (".gitignore", "AGENTS.md", "LICENSE", "README.md", "MAYA_MCP_README.md",
+              "CUSTOM_BODY_PLUGIN_README.md", "install_custom_body_rig.py", "install_custom_body_rig.mel",
               "pyproject.toml", "requirements.txt", "requirements-mcp.txt", "install.bat",
               "install_dragdrop.mel", "install_maya_mcp.mel", "install_maya_mcp.ps1",
               "run_maya_mcp.bat", "uninstall.bat")

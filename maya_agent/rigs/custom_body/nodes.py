@@ -51,6 +51,9 @@ def restore_values(ctx):
             if row["type"] == "displayLayer" and attr == "identification":
                 continue
             plug = ctx.name(row["name"]) + "." + attr
+            if row['type'] == 'nurbsCurve' and attr.startswith('ai') and not c.objExists(plug):
+                # Captured Arnold curve display attributes are optional in the standalone tool.
+                continue
             c.setAttr(plug, lock=False)
             if c.connectionInfo(plug, isDestination=True):
                 continue
@@ -63,5 +66,7 @@ def restore_values(ctx):
 def restore_channel_flags(ctx):
     for row in ctx.definition["nodes"]:
         for attr, meta in row["attributes"].items():
+            if row['type'] == 'nurbsCurve' and attr.startswith('ai') and not ctx.cmds.objExists(ctx.name(row['name']) + '.' + attr):
+                continue
             ctx.cmds.setAttr(ctx.name(row["name"]) + "." + attr,
                              keyable=meta["keyable"], lock=meta["locked"])

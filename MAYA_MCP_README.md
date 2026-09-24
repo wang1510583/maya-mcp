@@ -47,7 +47,7 @@ Windows PowerShell 在项目目录运行：
 `execute_maya_code` 中已提供 `cmds`，将结果赋给 `result` 可返回结构化数据。
 每次脚本调用的命名空间独立；跨步骤保存状态请使用 Maya 场景节点。
 
-### 自定义身体绑定 v1.1.0
+### 自定义身体绑定 v1.2.0
 
 例如：“创建自定义身体绑定，8 根骨骼和控制器，总高度 6 厘米。”
 参数为 `segment_count=8`、`height=6.0`，默认仍为原版四节。
@@ -59,6 +59,9 @@ Windows PowerShell 在项目目录运行：
 
 上述 JSON 用于 `call_maya_tool`。数量仅在新建时设置；已有动画和蒙皮不会被自动改造。
 模块说明见 [自定义身体绑定](maya_agent/rigs/custom_body/README.md)。
+
+独立界面：拖入 `install_custom_body_rig.mel`。选择模式勾选「在选择物体上创建并驱动」，检查目标列表顺序后创建。
+MCP 可传 `use_selection=true`，或 `targets` 明确指定腰到胸的完整路径顺序。该模式自动匹配目标数量、位置和朝向，拒绝覆盖已有动画或驱动。
 
 ## 其他 MCP 客户端
 

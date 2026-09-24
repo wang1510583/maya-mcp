@@ -1,0 +1,14 @@
+{
+  "schema_version": 3,
+  "version": "1.2.0",
+  "base_template": "body_v1.json",
+  "min_segments": 2,
+  "max_segments": 64,
+  "default_segments": 4,
+  "default_height": 6.0,
+  "linear_unit": "cm",
+  "selection_order": "hips_to_chest",
+  "target_driver": "parentConstraint_maintainOffset",
+  "fit": "world_position_and_rotation",
+  "rotation_blend": "rest_frame_compensated_quaternion_average"
+}
