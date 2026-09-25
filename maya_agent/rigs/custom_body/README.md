@@ -1,4 +1,4 @@
-# 自定义身体绑定 v1.2.0
+# 自定义身体绑定 v1.3.1
 
 以用户确认的四节脊柱绑定为基础，支持在创建时指定 2–64 根骨骼及同数量控制器。
 不依赖示例场景、outputs 目录、AdvancedSkeleton 或 AI API。
@@ -6,6 +6,10 @@
 v1.2.0 新增独立 Maya 窗口、工具架安装，以及按选择顺序匹配并驱动目标。
 将项目根目录 `install_custom_body_rig.mel` 拖入 Maya，即可使用界面。
 完整界面使用说明见根目录 `CUSTOM_BODY_PLUGIN_README.md`。
+
+v1.3.0 新增「拷贝动画至控制器」：临时定位器捕获世界运动、逐帧求解联动控制器的局部 TR，原目标改由新绑定驱动，原曲线断开并保留备份。
+
+v1.3.1 允许目标及父级的普通缩放关键帧输入，包含数值一直为 1 的缩放曲线。缩放曲线保持原连接、关键帧与切线，不转移到控制器；支持正值等比缩放动画，每个采样帧仍检查世界变换无非均匀缩放、非正缩放和剪切。
 
 ## 调用
 
@@ -38,6 +42,9 @@ rig = build(namespace="targetBody", targets=['|skeleton|waist', '|skeleton|waist
 | `on_conflict` | `increment` | 重名时编号；`error` 则报错 |
 | `use_selection` | `False` | 按当前有序选择，从腰至胸创建并驱动 |
 | `targets` | `None` | 显式目标列表，提供时自动启用选择模式 |
+| `copy_animation` | `False` | 选择模式下将普通时间关键帧 TR 烘焙到控制器 |
+| `start_frame` / `end_frame` | `None` | 默认当前播放范围；仅保证范围内采样帧姿态 |
+| `sample_step` | `1.0` | 正数采样间隔；单次最多 10001 个采样帧 |
 
 数量与高度是**新建参数**。已生成绑定的数量标签只读；本版本不在已有动画或蒙皮上动态增删骨骼。
 骨骼与控制器数量相同，暂不支持两者分别指定。控制器外观尺寸保持原版，不随高度自动缩放。
@@ -55,7 +62,7 @@ rig = build(namespace="targetBody", targets=['|skeleton|waist', '|skeleton|waist
 - 使用目标当前位置与旋转建立独立静态初始参考系，新控制器通道为零；新骨骼通过保持偏移的父约束驱动原目标。
 - 目标与原父级、蒙皮关系保持不变；支持非等距和弯曲排列。中段权重按累计距离分配，端点旋转转换到各中段参考系后混合。
 - 不从目标动态读取输入矩阵，避免新绑定输出约束与目标形成循环。
-- 拒绝引用/实例/重复/组件目标、锁定通道、已有平移旋转动画/驱动、非均匀/负缩放/剪切、相邻重合点。
+- 拒绝引用/实例/重复/组件目标、锁定通道、已有驱动、非均匀/负缩放/剪切、相邻重合点。默认拒绝已有平移旋转动画；copy_animation=True 时接受普通时间关键帧（包括父级）。
 - 现有动画以输入连接逐通道判断；不能仅依赖 `getAttr(settable=True)`，因为 Maya 会将 animCurve 通道标为可写。
 - 失败先删除本次约束和新节点，再恢复目标原始局部通道。测试必须涵盖创建输出约束后的故障回滚及独立请求撤销重做。
 
@@ -82,6 +89,9 @@ rig = build(namespace="targetBody", targets=['|skeleton|waist', '|skeleton|waist
 | `data/body_v1.json` | 版本化节点参数、连接、控制器 CV、骨骼定义 |
 | `data/body_v2.json` | 可调版本配方元数据及参数范围 |
 | `data/body_v3.json` | v1.2.0 的选择顺序、匹配和输出约束约定 |
+| `data/body_v4.json` | v1.3.0 的世界运动烘焙与原曲线备份约定 |
+| `data/body_v5.json` | v1.3.1 保留目标及父级缩放动画输入的约定 |
+| `animation.py` | 世界定位器采样、联动控制器局部解算、曲线备份和失败恢复 |
 | `topology.py` | 由包内原版节点原型生成可调拓扑；默认四节兼容分支 |
 | `fitting.py` | 不同位置/朝向的初始参考系、矩阵链与端点旋转转换 |
 | `targets.py` | 有序选择、前置检查、目标约束与失败恢复 |
@@ -118,8 +128,20 @@ v1.2.0：`scripts/run_custom_body_selection_tests.py` 验证普通物体、带�
 `scripts/test_custom_body_ui_mcp.py` 验证 UI 读取/调整顺序、按钮回调创建及独立请求撤销重做。
 `scripts/test_custom_body_target_guards.py` 在 Maya 中验证非法/已动画/约束目标拒绝，测试结束清理自身节点。
 
-默认不会覆盖现有节点、修改现有动画、切换场景或自动保存文件。
+默认不会覆盖现有节点、修改现有动画、切换场景或自动保存文件。明确启用 copy_animation 才会断开目标原 TR 动画并建立输出约束。
 一次创建为一个 Undo 分组；失败只清理本次创建的命名空间和节点。
+
+## 动画转移实现与边界
+
+捕获时保持原动画和父级输入不变；世界定位器曲线使用显式时间输入。普通 Maya animCurveTA/TL/TU 也可能使用隐式全局时间，没有 input 连接，前置检查应接受此情况。动画层、约束、表达式、SDK、剪切/轴心/轴向动画会拒绝。普通缩放关键帧保留在原目标及父级上，每帧检查正值等比缩放且无剪切。
+
+断开原动画后，以当前帧为建造姿态匹配新绑定。解算顺序是髋部、胸部、各中段；胸部位移需要扣除末段旋转后的初始偏移并除以 1-末中段胸部权重。中段按求值后的父矩阵反解局部 TR。setKeyframe(value=...) 后主动 dirty 控制器，避免读取旧的缓存值。
+
+原曲线保持原节点、关键帧、切线和外推，sourceAnimationBackup 保存原连接 JSON 和曲线 message 链接。Maya 删除此网络时可能一并删除其上游 animCurve；**失败清理前必须先断开备份 message 链接**，再删除新节点和恢复原曲线连接。
+
+新控制器关键帧用线性切线，仅保证采样帧的世界姿态，不保证原关键帧布局、采样间或范围外轨迹。创建中和删除定位器后均核对原目标世界矩阵（容差 1e-4），不通过即回滚。返回 animation_transfer 包含范围、采样数、最大误差和备份节点。
+
+Maya 2024 验证入口：`scripts/run_custom_body_animation_tests.py`（2/4/8 节、骨骼链、蒙皮、带动画父级、不同旋转顺序、分数帧、大角度旋转及失败恢复）；`scripts/test_custom_body_animation_ui_mcp.py`（UI 转移与独立请求撤销/重做）；`scripts/test_custom_body_animation_guards.py`（Maya 内运行）。
 
 ## 打包
 

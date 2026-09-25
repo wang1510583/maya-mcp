@@ -21,5 +21,5 @@ with ZipFile(archive, 'w', ZIP_DEFLATED) as zipped:
         zipped.write(path, path.relative_to(ROOT).as_posix())
 with ZipFile(archive) as zipped:
     assert zipped.testzip() is None
-    assert json.loads(zipped.read('maya_agent/rigs/custom_body/data/body_v3.json'))['version'] == VERSION
+    assert json.loads(zipped.read('maya_agent/rigs/custom_body/data/body_v5.json'))['version'] == VERSION
 print(json.dumps({'archive':str(archive),'files':len(files),'bytes':archive.stat().st_size},ensure_ascii=True))

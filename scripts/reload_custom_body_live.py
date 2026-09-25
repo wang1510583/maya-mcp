@@ -2,7 +2,7 @@
 import importlib
 
 for name in ("topology", "definition", "targets", "fitting", "context", "nodes", "controls", "skeleton",
-             "drivers", "display", "builder"):
+             "drivers", "display", "animation", "builder", "ui"):
     importlib.reload(importlib.import_module("maya_agent.rigs.custom_body." + name))
 importlib.reload(importlib.import_module("maya_agent.rigs.custom_body"))
 importlib.reload(importlib.import_module("maya_agent.tools.custom_body_rig"))

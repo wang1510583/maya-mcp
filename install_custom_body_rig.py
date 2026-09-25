@@ -22,7 +22,7 @@ def install():
     import maya_agent.rigs.custom_body as body
     importlib.reload(body)
     for name in ('topology', 'definition', 'targets', 'fitting', 'context', 'nodes',
-                 'controls', 'skeleton', 'drivers', 'display', 'builder', 'ui'):
+                 'controls', 'skeleton', 'drivers', 'display', 'animation', 'builder', 'ui'):
         importlib.reload(importlib.import_module('maya_agent.rigs.custom_body.' + name))
     importlib.reload(body)
     from maya_agent.rigs.custom_body import show_ui

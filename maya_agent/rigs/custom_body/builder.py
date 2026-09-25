@@ -8,16 +8,24 @@ COMPONENTS = (controls.build, skeleton.build, drivers.build, display.build)
 
 
 def build(namespace="customBody", on_conflict="increment", segment_count=4, height=6.0,
-          use_selection=False, targets=None):
+          use_selection=False, targets=None, copy_animation=False,
+          start_frame=None, end_frame=None, sample_step=1.0):
     validate_options(namespace, on_conflict)
     import maya.cmds as c
     import threading
     if threading.current_thread() is not threading.main_thread():
         raise RuntimeError("自定义身体绑定必须在 Maya 主线程创建")
     from . import targets as target_tools
+    from .animation import Transfer, frame_range
+    if copy_animation and not (use_selection or targets is not None):
+        raise ValueError('拷贝动画至控制器需要启用选择模式。')
+    frames = frame_range(c.playbackOptions(query=True, minTime=True) if start_frame is None else start_frame,
+                         c.playbackOptions(query=True, maxTime=True) if end_frame is None else end_frame,
+                         sample_step) if copy_animation else []
     samples = []
     if use_selection or targets is not None:
-        samples, height = target_tools.inspect(targets if targets is not None else target_tools.ordered_selection())
+        samples, height = target_tools.inspect(targets if targets is not None else target_tools.ordered_selection(),
+                                               allow_animation=copy_animation)
         segment_count = len(samples)
     data = load_definition(segment_count, height, preserve_four=not bool(samples))
     if samples:
@@ -37,12 +45,15 @@ def build(namespace="customBody", on_conflict="increment", segment_count=4, heig
     previous_namespace = c.namespaceInfo(currentNamespace=True)
     selection = c.ls(selection=True, long=True) or []
     ctx = BuildContext(c, data, namespace)
+    transfer = Transfer(ctx, samples, frames) if copy_animation else None
     use_undo = c.undoInfo(query=True, state=True)
     if use_undo:
         c.undoInfo(openChunk=True, chunkName="MayaMCP_create_custom_body_rig")
     try:
         c.namespace(setNamespace=":")
         c.namespace(add=namespace)
+        if transfer:
+            transfer.capture()
         for component in COMPONENTS:
             component(ctx)
         restore_values(ctx)
@@ -56,21 +67,31 @@ def build(namespace="customBody", on_conflict="increment", segment_count=4, heig
                                   ("customBodyHeight", "double", height)):
             c.addAttr(root, longName=attr, attributeType=kind)
             c.setAttr(root + "." + attr, value, lock=True)
+        if transfer:
+            transfer.detach()
         mappings = target_tools.connect(ctx, samples) if samples else []
+        animation_report = transfer.bake(mappings) if transfer else None
         result = {"display_name": DISPLAY_NAME, "version": VERSION, "namespace": namespace,
                   "segment_count": segment_count, "height": float(height),
                   "mode": "selection" if samples else "standard", "target_mapping": mappings,
+                  "animation_transfer": animation_report,
                   "nodes": list(ctx.created), "node_count": len(ctx.created),
                   "connection_count": len(data["connections"]),
                   "controls": {role: namespace + ":" + name for role, name in data["controls"].items()},
                   "joints": [namespace + ":" + name for name in data["joints"]],
                   "display_layer_connections": ctx.layer_connections}
     except Exception:
+        if transfer:
+            transfer.release_backup()
         ctx.cleanup()
-        if samples:
+        if transfer:
+            transfer.rollback()
+        elif samples:
             target_tools.restore(samples)
         raise
     finally:
+        if transfer:
+            c.currentTime(transfer.time, edit=True)
         c.namespace(setNamespace=previous_namespace)
         if selection:
             c.select(selection, replace=True)

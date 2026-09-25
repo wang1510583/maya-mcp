@@ -47,7 +47,7 @@ Windows PowerShell 在项目目录运行：
 `execute_maya_code` 中已提供 `cmds`，将结果赋给 `result` 可返回结构化数据。
 每次脚本调用的命名空间独立；跨步骤保存状态请使用 Maya 场景节点。
 
-### 自定义身体绑定 v1.2.0
+### 自定义身体绑定 v1.3.1
 
 例如：“创建自定义身体绑定，8 根骨骼和控制器，总高度 6 厘米。”
 参数为 `segment_count=8`、`height=6.0`，默认仍为原版四节。
@@ -61,7 +61,9 @@ Windows PowerShell 在项目目录运行：
 模块说明见 [自定义身体绑定](maya_agent/rigs/custom_body/README.md)。
 
 独立界面：拖入 `install_custom_body_rig.mel`。选择模式勾选「在选择物体上创建并驱动」，检查目标列表顺序后创建。
-MCP 可传 `use_selection=true`，或 `targets` 明确指定腰到胸的完整路径顺序。该模式自动匹配目标数量、位置和朝向，拒绝覆盖已有动画或驱动。
+MCP 可传 `use_selection=true`，或 `targets` 明确指定腰到胸的完整路径顺序。该模式自动匹配目标数量、位置和朝向，默认拒绝已有动画或驱动。
+
+显式传 `copy_animation=true` 可将普通 TR 时间关键帧转移到新控制器；`start_frame`、`end_frame` 默认播放范围，`sample_step` 默认 1。只保证采样帧世界姿态，原 TR 曲线断开并保留备份。普通缩放动画保留在原物体/父级，允许正值等比缩放。暂不支持动画层、已有约束/驱动或非均匀缩放。客户端未刷新参数时使用 `call_maya_tool`。
 
 ## 其他 MCP 客户端
 

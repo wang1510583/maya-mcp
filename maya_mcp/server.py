@@ -91,18 +91,24 @@ async def call_maya_tool(name: str, arguments: dict[str, Any]) -> CallToolResult
 @mcp.tool()
 async def create_custom_body_rig(namespace: str = "customBody", on_conflict: str = "increment",
                                  segment_count: int = 4, height: float = 6.0,
-                                 use_selection: bool = False, targets: list[str] | None = None) -> CallToolResult:
+                                 use_selection: bool = False, targets: list[str] | None = None,
+                                 copy_animation: bool = False, start_frame: float | None = None,
+                                 end_frame: float | None = None, sample_step: float = 1.0) -> CallToolResult:
     """创建自定义身体绑定：2–64 根骨骼及同数量控制器，矩阵驱动和旋转混合。
 
     用户说“创建自定义身体绑定”时使用。默认重名自动编号；当前仅支持厘米场景。
     segment_count 含髋部和胸部；height 是总高度（厘米，默认 6）。默认四节保留原版行为。
     参数仅用于新建，保留已有绑定、动画和蒙皮。后续扩展集中在 maya_agent.rigs.custom_body 模块。
     use_selection 按选择顺序从腰到胸创建并驱动物体；targets 可传明确的顺序列表。
-    选择模式以目标数量及位置/朝向为准，拒绝已有动画、驱动连接和锁定通道。
+    copy_animation 在选择模式下转移普通 TR 动画到控制器；原曲线备份，范围默认播放区间。
+    只保证采样帧的世界姿态；拒绝动画层、已有约束/驱动和锁定通道。
     """
     return await call_maya_tool("create_custom_body_rig", {"namespace": namespace, "on_conflict": on_conflict,
                                                         "segment_count": segment_count, "height": height,
                                                         "use_selection": use_selection,
+                                                        "copy_animation": copy_animation,
+                                                        "start_frame": start_frame, "end_frame": end_frame,
+                                                        "sample_step": sample_step,
                                                         **({"targets": targets} if targets is not None else {})})
 
 

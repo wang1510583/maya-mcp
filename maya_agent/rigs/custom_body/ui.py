@@ -16,7 +16,8 @@ class BodyRigWindow:
             c.deleteUI(WINDOW)
         was_tracking = c.selectPref(query=True, trackSelectionOrder=True)
         c.selectPref(trackSelectionOrder=True)
-        c.window(WINDOW, title=DISPLAY_NAME + '  v' + VERSION, widthHeight=(500, 620), sizeable=True)
+        c.window(WINDOW, title=DISPLAY_NAME + '  v' + VERSION, widthHeight=(520, 700), sizeable=True)
+        c.scrollLayout(childResizable=True)
         c.columnLayout(adjustableColumn=True, rowSpacing=9, columnAttach=('both', 14))
         c.separator(height=5, style='none')
         c.text(label=DISPLAY_NAME, align='left', font='boldLabelFont', height=26)
@@ -34,7 +35,7 @@ class BodyRigWindow:
                                               collapsable=False, enable=False, marginWidth=8, marginHeight=8)
         c.columnLayout(adjustableColumn=True, rowSpacing=7)
         c.button(label='读取当前选择（请从腰到胸逐个选择）', command=self.read_selection, height=28)
-        self.target_list = c.textScrollList(height=170, allowMultiSelection=False)
+        self.target_list = c.textScrollList(height=110, allowMultiSelection=False)
         c.rowLayout(numberOfColumns=3, adjustableColumn=3, columnWidth3=(110, 110, 210))
         c.button(label='↑ 上移', width=105, command=lambda *_: self.move(-1))
         c.button(label='↓ 下移', width=105, command=lambda *_: self.move(1))
@@ -43,8 +44,16 @@ class BodyRigWindow:
         self.target_info = c.text(label='尚未读取目标', align='left', height=22)
         c.setParent('..')
         c.setParent('..')
-        c.text(label='保留目标原层级及蒙皮。已有动画、驱动或锁定通道会提示处理。',
-               align='left', wordWrap=True, height=34)
+        self.copy_animation = c.checkBox(label='拷贝动画至控制器', value=False, enable=False,
+                                         changeCommand=self.toggle_animation)
+        self.animation_fields = c.columnLayout(adjustableColumn=True, rowSpacing=5, enable=False)
+        self.frame_bounds = c.floatFieldGrp(label='起始 / 结束帧', numberOfFields=2, precision=3,
+                                            value1=c.playbackOptions(query=True, minTime=True),
+                                            value2=c.playbackOptions(query=True, maxTime=True))
+        self.sample_step = c.floatFieldGrp(label='采样间隔（帧）', numberOfFields=1, value1=1, precision=3)
+        c.setParent('..')
+        c.text(label='逐帧转移平移与旋转；原曲线备份，缩放动画保留在物体上。\n仅保证采样帧姿态；不支持动画层、已有约束或非均匀缩放。',
+               align='left', wordWrap=True, height=44)
         self.create_button = c.button(label='创建自定义身体绑定', height=38,
                                        backgroundColor=(0.20, 0.43, 0.48), command=self.create)
         self.status = c.scrollField(editable=False, wordWrap=True, height=66,
@@ -59,6 +68,10 @@ class BodyRigWindow:
         self.c.intFieldGrp(self.count, edit=True, enable=not enabled)
         self.c.floatFieldGrp(self.height, edit=True, enable=not enabled)
         self.c.frameLayout(self.selection_frame, edit=True, enable=enabled)
+        self.c.checkBox(self.copy_animation, edit=True, enable=enabled)
+        if not enabled:
+            self.c.checkBox(self.copy_animation, edit=True, value=False)
+        self.toggle_animation()
         if enabled:
             self.manual_dimensions = (self.c.intFieldGrp(self.count, query=True, value1=True),
                                       self.c.floatFieldGrp(self.height, query=True, value1=True))
@@ -68,6 +81,11 @@ class BodyRigWindow:
             self.c.intFieldGrp(self.count, edit=True, value1=self.manual_dimensions[0])
             self.c.floatFieldGrp(self.height, edit=True, value1=self.manual_dimensions[1], label='总高度（厘米）')
             self.status_text('标准模式：按数量和总高度创建独立绑定。')
+
+    def toggle_animation(self, *_):
+        enabled = self.c.checkBox(self.selection_mode, query=True, value=True) and self.c.checkBox(
+            self.copy_animation, query=True, value=True)
+        self.c.columnLayout(self.animation_fields, edit=True, enable=enabled)
 
     def read_selection(self, *_):
         from .targets import ordered_selection
@@ -123,6 +141,10 @@ class BodyRigWindow:
             kwargs = {'namespace': c.textFieldGrp(self.namespace, query=True, text=True).strip()}
             if selected:
                 kwargs['targets'] = list(self.targets)
+                kwargs.update(copy_animation=c.checkBox(self.copy_animation, query=True, value=True),
+                              start_frame=c.floatFieldGrp(self.frame_bounds, query=True, value1=True),
+                              end_frame=c.floatFieldGrp(self.frame_bounds, query=True, value2=True),
+                              sample_step=c.floatFieldGrp(self.sample_step, query=True, value1=True))
             else:
                 kwargs.update(segment_count=c.intFieldGrp(self.count, query=True, value1=True),
                               height=c.floatFieldGrp(self.height, query=True, value1=True))
@@ -131,6 +153,10 @@ class BodyRigWindow:
             self.status_text('已创建 {}：{} 根骨骼 / {} 个控制器。{}\n可按 Ctrl+Z 撤销本次创建。'.format(
                 rig['namespace'], rig['segment_count'], rig['segment_count'],
                 '已按列表顺序驱动目标。' if selected else '独立绑定已就绪。'))
+            if rig.get('animation_transfer'):
+                self.status_text('已创建 {}；动画已转移至控制器，共 {} 个采样帧。\n原曲线保留在 {}。Ctrl+Z 可整次撤销。'.format(
+                    rig['namespace'], rig['animation_transfer']['sample_count'],
+                    rig['animation_transfer']['source_animation_backup']))
             return rig
         except Exception as exc:
             self.status_text('创建未完成：' + str(exc))

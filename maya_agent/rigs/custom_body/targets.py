@@ -11,7 +11,7 @@ def ordered_selection():
     return c.ls(orderedSelection=True, long=True) or []
 
 
-def inspect(names):
+def inspect(names, allow_animation=False):
     import maya.cmds as c
     import maya.api.OpenMaya as om
     if not isinstance(names, (list, tuple)) or not 2 <= len(names) <= 64:
@@ -36,14 +36,34 @@ def inspect(names):
         for channel in CHANNELS:
             plug = node + '.' + channel
             # Maya reports animated channels as settable; check each incoming plug explicitly.
+            incoming = c.listConnections(plug, source=True, destination=False, plugs=True) or []
             if (c.getAttr(plug, lock=True) or not c.getAttr(plug, settable=True)
-                    or c.listConnections(plug, source=True, destination=False)):
+                    or (incoming and not (allow_animation and _time_curve_input(incoming)))):
                 raise ValueError('目标通道已锁定或已有动画/连接，未覆盖：' + plug)
         ancestor = node
         while ancestor:
             for attr in ('translate', 'rotate', 'offsetParentMatrix') + CHANNELS:
-                if c.listConnections(ancestor + '.' + attr, source=True, destination=False):
+                incoming = c.listConnections(ancestor + '.' + attr, source=True, destination=False, plugs=True) or []
+                if incoming and not (allow_animation and attr != 'offsetParentMatrix' and _time_curve_input(incoming)):
                     raise ValueError('目标或父级已有动画/驱动连接，未覆盖：' + ancestor + '.' + attr)
+            if allow_animation:
+                # Scale stays on the original objects; ordinary keyed scale is not a TR conflict.
+                for attr in ('scale', 'scaleX', 'scaleY', 'scaleZ'):
+                    incoming = c.listConnections(ancestor + '.' + attr, source=True, destination=False, plugs=True) or []
+                    if incoming and not _time_curve_input(incoming):
+                        raise ValueError('缩放暂只支持普通时间关键帧输入：' + ancestor + '.' + attr)
+                for attr in ('shear', 'rotateAxis', 'rotatePivot', 'rotatePivotTranslate',
+                             'scalePivot', 'scalePivotTranslate', 'rotateOrder', 'jointOrient'):
+                    if c.attributeQuery(attr, node=ancestor, exists=True) and c.listConnections(
+                            ancestor + '.' + attr, source=True, destination=False):
+                        raise ValueError('动画转移暂不支持剪切、轴向、轴心或旋转顺序动画：' + ancestor + '.' + attr)
+                # Compound plugs may not enumerate incoming child connections in Maya.
+                for attr in ('shear','rotateAxis','rotatePivot','rotatePivotTranslate',
+                             'scalePivot','scalePivotTranslate','jointOrient'):
+                    for axis in 'XYZ':
+                        plug = ancestor + '.' + attr + axis
+                        if c.objExists(plug) and c.listConnections(plug, source=True, destination=False):
+                            raise ValueError('动画转移暂不支持此输入：' + plug)
             parent = c.listRelatives(ancestor, parent=True, fullPath=True) or []
             ancestor = parent[0] if parent else None
         matrix = om.MMatrix(c.xform(node, query=True, worldSpace=True, matrix=True))
@@ -65,6 +85,20 @@ def inspect(names):
     if any(length < 1e-5 for length in lengths):
         raise ValueError('相邻目标位置重合，无法确定骨骼长度；请调整选择顺序或目标位置。')
     return samples, sum(lengths)
+
+
+def _time_curve_input(plugs):
+    """Only ordinary time-keyed TR curves; never silently replace a rig or animation layer."""
+    import maya.cmds as c
+    for plug in plugs:
+        node = plug.split('.')[0]
+        if c.nodeType(node) not in ('animCurveTA', 'animCurveTL', 'animCurveTU'):
+            return False
+        inputs = c.listConnections(node + '.input', source=True, destination=False) or []
+        # Maya time-input curves commonly use implicit global time (no connection).
+        if inputs and (len(inputs) != 1 or c.nodeType(inputs[0]) != 'time'):
+            return False
+    return True
 
 
 def connect(ctx, samples):
