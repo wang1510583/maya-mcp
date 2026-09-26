@@ -35,4 +35,4 @@ where = ["."]
 include = ["maya_agent*"]
 
 [tool.setuptools.package-data]
-maya_agent = ["ui/styles/*.qss", "rigs/custom_body/data/*.json", "rigs/custom_body/README.md", "../resources/**/*", "../config/*.yaml"]
+maya_agent = ["ui/styles/*.qss", "rigs/custom_body/data/*.json", "rigs/custom_body/README.md", "rigs/soft_limb/data/*.ma", "rigs/soft_limb/data/*.json", "rigs/soft_limb/README.md", "rigs/soft_leg/data/*.ma", "rigs/soft_leg/data/*.json", "rigs/soft_leg/README.md", "rigs/integrated/README.md", "../resources/**/*", "../config/*.yaml"]

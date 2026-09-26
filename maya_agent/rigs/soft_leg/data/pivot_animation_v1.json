@@ -1,0 +1,11 @@
+{
+  "version": "1.1.0",
+  "feature": "animated_pivot_adjustment",
+  "controls": ["heel", "toe_end", "toe"],
+  "preserve": ["original_animation_curves", "tangents", "infinity", "continuous_world_motion"],
+  "reference_inputs": "independent copies of ordinary time rotation and scale curves",
+  "compensation": "new_base_rotatePivotTranslate + old_reference_translation - new_reference_translation",
+  "evaluation": "native transform, decomposeMatrix and plusMinusAverage nodes",
+  "subsequent_animation_edits": "use the new pivot; reference curves stay frozen",
+  "existing_rigs": "soft_leg 1.0.0 and later; no rebuild required"
+}

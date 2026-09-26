@@ -28,6 +28,12 @@ def run_case(count, height):
         assert response.ok, response.error
         rig = response.data
         rigs.append(rig)
+        assert not cmds.ls(ns + ':*', type='displayLayer')
+        for role, ctrl in rig['controls'].items():
+            assert cmds.getAttr(ctrl + '.overrideEnabled')
+            assert cmds.getAttr(ctrl + '.overrideColor') == (14 if role in ('hips', 'chest') else 17)
+        assert cmds.getAttr(rig['joints'][0] + '.overrideColor') == 18
+        checks.append('no redundant layers and original display colors retained')
         assert len(rig['joints']) == len(rig['controls']) == count
         assert cmds.getAttr(ns + ':hips_zero.customBodySegmentCount') == count
         assert cmds.getAttr(ns + ':hips_zero.customBodyHeight') == height

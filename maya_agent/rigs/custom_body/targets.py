@@ -11,10 +11,10 @@ def ordered_selection():
     return c.ls(orderedSelection=True, long=True) or []
 
 
-def inspect(names, allow_animation=False):
+def inspect(names, allow_animation=False, minimum_count=2, allow_parent_drivers=False):
     import maya.cmds as c
     import maya.api.OpenMaya as om
-    if not isinstance(names, (list, tuple)) or not 2 <= len(names) <= 64:
+    if not isinstance(names, (list, tuple)) or not minimum_count <= len(names) <= 64:
         raise ValueError('选择模式需要 2–64 个物体；列表第一项是腰部，最后一项是胸部。')
     samples, seen = [], set()
     for name in names:
@@ -42,9 +42,13 @@ def inspect(names, allow_animation=False):
                 raise ValueError('目标通道已锁定或已有动画/连接，未覆盖：' + plug)
         ancestor = node
         while ancestor:
+            # Integrated creation captures world poses before building any output.
+            # It never disconnects ancestor inputs, so parent TR/OPM drivers are
+            # safe to retain when animation sampling was explicitly enabled.
+            keep_parent_driver = allow_parent_drivers and allow_animation and ancestor != node
             for attr in ('translate', 'rotate', 'offsetParentMatrix') + CHANNELS:
                 incoming = c.listConnections(ancestor + '.' + attr, source=True, destination=False, plugs=True) or []
-                if incoming and not (allow_animation and attr != 'offsetParentMatrix' and _time_curve_input(incoming)):
+                if incoming and not keep_parent_driver and not (allow_animation and attr != 'offsetParentMatrix' and _time_curve_input(incoming)):
                     raise ValueError('目标或父级已有动画/驱动连接，未覆盖：' + ancestor + '.' + attr)
             if allow_animation:
                 # Scale stays on the original objects; ordinary keyed scale is not a TR conflict.

@@ -12,6 +12,7 @@ OUTPUT = ROOT / "outputs" / "github-publish"
 DIRECTORIES = ("maya_agent", "maya_mcp", "scripts", "tests_mcp", "resources", "config", "docs")
 ROOT_FILES = (".gitignore", "AGENTS.md", "LICENSE", "README.md", "MAYA_MCP_README.md",
               "CUSTOM_BODY_PLUGIN_README.md", "install_custom_body_rig.py", "install_custom_body_rig.mel",
+              "install_custom_arm_rig.py", "install_custom_leg_rig.py", "install_integrated_rig.py",
               "pyproject.toml", "requirements.txt", "requirements-mcp.txt", "install.bat",
               "install_dragdrop.mel", "install_maya_mcp.mel", "install_maya_mcp.ps1",
               "run_maya_mcp.bat", "uninstall.bat")
@@ -27,9 +28,14 @@ def main():
 
     def ignored(path):
         relative = path.relative_to(ROOT).as_posix()
-        return any((pattern.endswith('/') and pattern.rstrip('/') in path.relative_to(ROOT).parts)
-                   or fnmatch.fnmatch(relative, pattern) or fnmatch.fnmatch(path.name, pattern)
-                   for pattern in ignore)
+        excluded = False
+        for rule in ignore:
+            negated = rule.startswith('!')
+            pattern = rule[1:] if negated else rule
+            if ((pattern.endswith('/') and pattern.rstrip('/') in path.relative_to(ROOT).parts)
+                    or fnmatch.fnmatch(relative, pattern) or fnmatch.fnmatch(path.name, pattern)):
+                excluded = not negated
+        return excluded
 
     paths = [ROOT / name for name in ROOT_FILES]
     for name in DIRECTORIES:

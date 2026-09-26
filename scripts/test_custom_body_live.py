@@ -35,7 +35,7 @@ def near(a, b):
 
 try:
     a = invoke(namespace=base)
-    assert a['node_count'] == 45 and a['connection_count'] == 121
+    assert a['node_count'] == 42 and a['connection_count'] == 113
     assert cmds.getAttr(base + ':hips_zero.customBodyRigVersion') == VERSION
     for row in data['nodes']:
         node = row['name'].replace('testSetup:', base+':')
@@ -51,7 +51,7 @@ try:
         assert cmds.isConnected(edge['source'].replace('testSetup:',base+':'), edge['destination'].replace('testSetup:',base+':'))
     for i,j in enumerate(a['joints']):
         assert all(near(x,y) for x,y in zip(cmds.xform(j,query=True,worldSpace=True,translation=True), [0,2*i,0]))
-    checks.append('registry build, version tag, 45 nodes, connections and original curve shapes')
+    checks.append('registry build, version tag, 42 nodes, connections and original curve shapes')
 
     chest = a['controls']['chest']
     cmds.setAttr(chest+'.translate',3,1.5,-1.2,type='double3')
@@ -70,12 +70,13 @@ try:
     b=invoke(namespace=base)
     assert b['namespace']==base+'_02'
     assert {e['source'] for e in a['display_layer_connections']}.isdisjoint({e['source'] for e in b['display_layer_connections']})
-    cmds.setAttr(base+':layer1.visibility',False)
-    assert cmds.getAttr(b['namespace']+':layer1.visibility')
+    assert set(cmds.ls(type='displayLayer')) == set(original_layers)
+    cmds.setAttr(a['controls']['hips']+'.overrideColor',6)
+    assert cmds.getAttr(b['controls']['hips']+'.overrideColor') == 14
     assert all(cmds.getAttr(n+'.visibility')==v for n,v in original_layers.items())
     cmds.setAttr(a['controls']['hips']+'.translateX',4)
     assert near(cmds.xform(b['joints'][0],query=True,worldSpace=True,translation=True)[0],0)
-    checks.append('repeat creation allocates isolated namespaces and display layers')
+    checks.append('repeat creation isolates display overrides without extra layers')
 
     before=set(cmds.ls(long=True) or [])
     denied=run_tool('create_custom_body_rig',{'namespace':base,'on_conflict':'error'})

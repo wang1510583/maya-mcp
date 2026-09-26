@@ -6,18 +6,45 @@ Four controls retain the original graph, names, shapes and rounded slide weights
 from copy import deepcopy
 
 
+def _without_display_layers(data):
+    """Keep the template's display overrides directly on its DAG nodes."""
+    nodes = {n['name']: n for n in data['nodes']}
+    layers = {name for name, row in nodes.items() if row['type'] == 'displayLayer'}
+    attributes = {'enabled': 'overrideEnabled', 'color': 'overrideColor',
+                  'displayType': 'overrideDisplayType', 'visibility': 'overrideVisibility',
+                  'shading': 'overrideShading', 'texturing': 'overrideTexturing',
+                  'levelOfDetail': 'overrideLevelOfDetail', 'playback': 'overridePlayback',
+                  'hideOnPlayback': 'hideOnPlayback', 'overrideColorA': 'overrideColorA',
+                  'overrideRGBColors': 'overrideRGBColors',
+                  'overrideColorR': 'overrideColorR', 'overrideColorG': 'overrideColorG',
+                  'overrideColorB': 'overrideColorB'}
+    connections = []
+    for edge in data['connections']:
+        source = edge['source'].split('.', 1)[0]
+        dest = edge['destination'].split('.', 1)[0]
+        if source in layers and edge['destination'].endswith('.drawOverride'):
+            for src, dst in attributes.items():
+                if src in nodes[source]['attributes']:
+                    nodes[dest]['attributes'][dst] = deepcopy(nodes[source]['attributes'][src])
+        if source not in layers and dest not in layers:
+            connections.append(edge)
+    data['nodes'] = [n for n in data['nodes'] if n['name'] not in layers]
+    data['connections'] = connections
+    return data
+
+
 def compile_definition(base, segment_count, height, version, preserve_four=True):
     data = deepcopy(base)
     data.update(version=version, segment_count=segment_count, height=float(height))
     if segment_count == 4 and preserve_four:
-        # Preserve the complete v1 graph, including 0.333 / 0.667 weights.
+        # Preserve the v1 solver graph, including 0.333 / 0.667 weights.
         factor = height / 6.0
         for row in data["nodes"]:
             for attr, meta in row["attributes"].items():
                 if attr in {"translateX", "translateY", "translateZ", "restTranslateX",
                             "restTranslateY", "restTranslateZ", "inputTranslateY"}:
                     meta["value"] *= factor
-        return data
+        return _without_display_layers(data)
 
     prefix = base["source_namespace"] + ":"
     prototypes = {n["name"].split(":")[-1]: n for n in base["nodes"]}
@@ -123,4 +150,4 @@ def compile_definition(base, segment_count, height, version, preserve_four=True)
     for stem in stems:
         edge("layer{}.drawInfo".format(1 if stem in ("hips", "chest") else 2), stem + "_ctrl.drawOverride")
     edge("layer3.drawInfo", "joint1.drawOverride")
-    return data
+    return _without_display_layers(data)

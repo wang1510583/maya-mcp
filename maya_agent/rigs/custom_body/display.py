@@ -1,4 +1,4 @@
-"""Independent display layers and controller colors for each rig instance."""
+"""Display component compatibility hook; v1.3.2 uses direct DAG overrides."""
 from .nodes import create_records
 
 

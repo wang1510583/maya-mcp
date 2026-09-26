@@ -5,11 +5,24 @@ import pytest
 from maya_agent.rigs.custom_body.definition import DATA_PATH, VERSION, load_definition
 
 
-def test_four_segment_graph_is_backwards_compatible():
+def test_four_segment_solver_is_preserved_without_classification_layers():
     original = json.loads(DATA_PATH.read_text(encoding="utf-8"))
     current = load_definition()
-    for field in ("nodes", "connections", "controls", "joints", "linear_unit"):
+    for field in ("controls", "joints", "linear_unit"):
         assert current[field] == original[field]
+    old_nodes = {n['name']: n for n in original['nodes'] if n['type'] != 'displayLayer'}
+    assert {n['name'] for n in current['nodes']} == set(old_nodes)
+    for node in current['nodes']:
+        old = old_nodes[node['name']]
+        assert {k: v for k, v in node.items() if k != 'attributes'} == {
+            k: v for k, v in old.items() if k != 'attributes'}
+        for attr, value in old['attributes'].items():
+            if not attr.startswith('override') and attr != 'hideOnPlayback':
+                assert node['attributes'][attr] == value
+    assert current['connections'] == [e for e in original['connections']
+                                     if e['source'].split('.')[0] in old_nodes
+                                     and e['destination'].split('.')[0] in old_nodes]
+    assert len(current['nodes']) == 42 and len(current['connections']) == 113
     assert current["version"] == VERSION
 
 
@@ -17,6 +30,7 @@ def test_four_segment_graph_is_backwards_compatible():
 def test_variable_graph_is_closed_and_uniquely_connected(count):
     data = load_definition(count, 12)
     names = {n["name"] for n in data["nodes"]}
+    assert not any(n['type'] == 'displayLayer' for n in data['nodes'])
     assert len(names) == len(data["nodes"])
     assert len(data["controls"]) == len(data["joints"]) == count
     assert len([n for n in data["nodes"] if n["type"] == "parentConstraint"]) == count

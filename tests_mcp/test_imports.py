@@ -21,10 +21,10 @@ class BlockHTTP(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0, BlockHTTP())
 from maya_agent.tools.registry import ensure_tools_loaded, all_tools
 ensure_tools_loaded()
-assert len(all_tools()) == 117
+assert len(all_tools()) == 120
 assert "maya_agent.llm.registry" not in sys.modules
 assert "httpx" not in sys.modules
-print("117 tools loaded without HTTP provider dependencies")
+print("120 tools loaded without HTTP provider dependencies")
 '''
     result = subprocess.run([sys.executable, "-S", "-c", code, str(root)], capture_output=True, text=True)
     assert result.returncode == 0, result.stdout + result.stderr

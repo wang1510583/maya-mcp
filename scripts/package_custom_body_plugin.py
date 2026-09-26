@@ -6,7 +6,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from maya_agent.rigs.custom_body.definition import VERSION
+from maya_agent.rigs.custom_body.definition import VERSION, RECIPE_PATH
 
 files = [ROOT / name for name in ('install_custom_body_rig.py', 'install_custom_body_rig.mel',
                                   'CUSTOM_BODY_PLUGIN_README.md', 'LICENSE',
@@ -21,5 +21,5 @@ with ZipFile(archive, 'w', ZIP_DEFLATED) as zipped:
         zipped.write(path, path.relative_to(ROOT).as_posix())
 with ZipFile(archive) as zipped:
     assert zipped.testzip() is None
-    assert json.loads(zipped.read('maya_agent/rigs/custom_body/data/body_v5.json'))['version'] == VERSION
+    assert json.loads(zipped.read(RECIPE_PATH.relative_to(ROOT).as_posix()))['version'] == VERSION
 print(json.dumps({'archive':str(archive),'files':len(files),'bytes':archive.stat().st_size},ensure_ascii=True))

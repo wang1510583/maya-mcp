@@ -5,9 +5,9 @@ import re
 import math
 
 DISPLAY_NAME = "自定义身体绑定"
-VERSION = "1.3.1"
+VERSION = "1.3.2"
 DATA_PATH = Path(__file__).parent / "data" / "body_v1.json"
-RECIPE_PATH = DATA_PATH.with_name("body_v5.json")
+RECIPE_PATH = DATA_PATH.with_name("body_v6.json")
 COMPONENT_ORDER = ("controls", "skeleton", "drivers", "display")
 
 
@@ -15,7 +15,7 @@ def load_definition(segment_count=4, height=6.0, preserve_four=True):
     from .topology import compile_definition
     validate_dimensions(segment_count, height)
     recipe = json.loads(RECIPE_PATH.read_text(encoding="utf-8"))
-    if recipe["schema_version"] != 5 or recipe["version"] != VERSION:
+    if recipe["schema_version"] != 6 or recipe["version"] != VERSION:
         raise ValueError("Unsupported custom body rig recipe version")
     data = json.loads(DATA_PATH.read_text(encoding="utf-8"))
     if data["schema_version"] != 1 or data["version"] != "1.0.0":

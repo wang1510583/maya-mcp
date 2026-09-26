@@ -28,6 +28,8 @@ connection.json
 # User scenes, captures, backups and generated reports
 outputs/
 *.ma
+!maya_agent/rigs/soft_limb/data/limb_v1.ma
+!maya_agent/rigs/soft_leg/data/leg_v1.ma
 *.mb
 *.mayaagent.json
 *.bak

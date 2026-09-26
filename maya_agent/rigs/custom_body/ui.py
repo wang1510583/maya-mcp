@@ -6,58 +6,39 @@ _instance = None
 
 
 class BodyRigWindow:
-    def __init__(self):
+    def __init__(self,extra_options=None):
         import maya.cmds as c
+        from maya_agent.rigs import ui_common as layout
         self.c = c
         self.targets = []
         self.last_result = None
         self.manual_dimensions = (4, 6.0)
-        if c.window(WINDOW, exists=True):
-            c.deleteUI(WINDOW)
         was_tracking = c.selectPref(query=True, trackSelectionOrder=True)
         c.selectPref(trackSelectionOrder=True)
-        c.window(WINDOW, title=DISPLAY_NAME + '  v' + VERSION, widthHeight=(520, 700), sizeable=True)
-        c.scrollLayout(childResizable=True)
-        c.columnLayout(adjustableColumn=True, rowSpacing=9, columnAttach=('both', 14))
-        c.separator(height=5, style='none')
-        c.text(label=DISPLAY_NAME, align='left', font='boldLabelFont', height=26)
-        c.text(label='腰部 → 脊柱 → 胸部   ·   原生骨骼与控制器', align='left', height=20)
-        c.separator(style='in', height=10)
-        self.namespace = c.textFieldGrp(label='名称前缀', text='customBody', columnWidth2=(95, 350))
+        layout.begin(c,WINDOW,DISPLAY_NAME,VERSION,'按腰部 → 脊柱 → 胸部的顺序，选择 2–64 根骨骼或物体。')
+        self.selection_frame,self.target_list=layout.selection(c,self.read_selection,self.reverse)
+        c.frameLayout(self.selection_frame,edit=True,enable=False)
+        self.targets_list=self.target_list
+        c.rowLayout(numberOfColumns=3,adjustableColumn=3,columnWidth3=(110,110,240))
+        c.button(label='↑ 上移',width=105,command=lambda *_:self.move(-1))
+        c.button(label='↓ 下移',width=105,command=lambda *_:self.move(1))
+        c.button(label='移除所选行',command=self.remove)
+        c.setParent('..')
+        self.target_info=c.text(label='尚未读取目标',align='left',height=22)
+        self.namespace=layout.namespace(c,'customBody')
         self.count = c.intFieldGrp(label='骨骼 / 控制器数', numberOfFields=1, value1=4,
                                    columnWidth2=(110, 100))
         self.height = c.floatFieldGrp(label='总高度（厘米）', numberOfFields=1, value1=6,
                                       precision=3, columnWidth2=(110, 100))
         self.selection_mode = c.checkBox(label='在选择物体上创建并驱动', value=False,
                                          changeCommand=self.toggle_selection)
-        c.text(label='勾选后，数量、位置和朝向由下方目标列表决定。', align='left', height=22)
-        self.selection_frame = c.frameLayout(label='目标顺序：第一项腰部，最后一项胸部',
-                                              collapsable=False, enable=False, marginWidth=8, marginHeight=8)
-        c.columnLayout(adjustableColumn=True, rowSpacing=7)
-        c.button(label='读取当前选择（请从腰到胸逐个选择）', command=self.read_selection, height=28)
-        self.target_list = c.textScrollList(height=110, allowMultiSelection=False)
-        c.rowLayout(numberOfColumns=3, adjustableColumn=3, columnWidth3=(110, 110, 210))
-        c.button(label='↑ 上移', width=105, command=lambda *_: self.move(-1))
-        c.button(label='↓ 下移', width=105, command=lambda *_: self.move(1))
-        c.button(label='移除所选行', command=self.remove)
-        c.setParent('..')
-        self.target_info = c.text(label='尚未读取目标', align='left', height=22)
-        c.setParent('..')
-        c.setParent('..')
+        c.text(label='勾选后，数量、位置和朝向由目标列表决定。', align='left', height=22)
         self.copy_animation = c.checkBox(label='拷贝动画至控制器', value=False, enable=False,
                                          changeCommand=self.toggle_animation)
-        self.animation_fields = c.columnLayout(adjustableColumn=True, rowSpacing=5, enable=False)
-        self.frame_bounds = c.floatFieldGrp(label='起始 / 结束帧', numberOfFields=2, precision=3,
-                                            value1=c.playbackOptions(query=True, minTime=True),
-                                            value2=c.playbackOptions(query=True, maxTime=True))
-        self.sample_step = c.floatFieldGrp(label='采样间隔（帧）', numberOfFields=1, value1=1, precision=3)
-        c.setParent('..')
-        c.text(label='逐帧转移平移与旋转；原曲线备份，缩放动画保留在物体上。\n仅保证采样帧姿态；不支持动画层、已有约束或非均匀缩放。',
-               align='left', wordWrap=True, height=44)
-        self.create_button = c.button(label='创建自定义身体绑定', height=38,
-                                       backgroundColor=(0.20, 0.43, 0.48), command=self.create)
-        self.status = c.scrollField(editable=False, wordWrap=True, height=66,
-                                     text='就绪。' if was_tracking else '已开启选择顺序追踪，请从腰到胸重新逐个选择，再读取目标。')
+        self.animation_fields,self.frame_bounds,self.sample_step=layout.animation_fields(c)
+        if extra_options:extra_options()
+        self.create_button=layout.create_button(c,'创建自定义身体绑定',self.create)
+        self.status=layout.status(c,'就绪。' if was_tracking else '已开启选择顺序追踪，请从腰到胸重新逐个选择，再读取目标。')
         c.showWindow(WINDOW)
 
     def status_text(self, text):
@@ -92,7 +73,7 @@ class BodyRigWindow:
         try:
             self.targets = ordered_selection()
             self.refresh_list()
-            self.status_text('请检查下方列表顺序；可上移、下移，再点击创建。')
+            self.status_text('请检查目标列表顺序；可上移、下移，再点击创建。')
         except Exception as exc:
             self.status_text(str(exc))
 
@@ -124,6 +105,10 @@ class BodyRigWindow:
         if 0 <= other < len(self.targets):
             self.targets[index], self.targets[other] = self.targets[other], self.targets[index]
             self.refresh_list(other)
+
+    def reverse(self,*_):
+        self.targets.reverse()
+        self.refresh_list()
 
     def remove(self, *_):
         indices = self.c.textScrollList(self.target_list, query=True, selectIndexedItem=True) or []

@@ -1,4 +1,6 @@
-# 自定义身体绑定 v1.3.1
+# 自定义身体绑定 v1.3.2
+
+窗口布局已与手臂、腿部工具统一，共用 `maya_agent.rigs.ui_common`。身体的数量/高度、标准创建及目标列表上移/下移/移除功能保留；目标列表现在置于顶部，并增加反转顺序按钮。
 
 以用户确认的四节脊柱绑定为基础，支持在创建时指定 2–64 根骨骼及同数量控制器。
 不依赖示例场景、outputs 目录、AdvancedSkeleton 或 AI API。
@@ -10,6 +12,8 @@ v1.2.0 新增独立 Maya 窗口、工具架安装，以及按选择顺序匹配�
 v1.3.0 新增「拷贝动画至控制器」：临时定位器捕获世界运动、逐帧求解联动控制器的局部 TR，原目标改由新绑定驱动，原曲线断开并保留备份。
 
 v1.3.1 允许目标及父级的普通缩放关键帧输入，包含数值一直为 1 的缩放曲线。缩放曲线保持原连接、关键帧与切线，不转移到控制器；支持正值等比缩放动画，每个采样帧仍检查世界变换无非均匀缩放、非正缩放和剪切。
+
+v1.3.2 不再创建 `layer1/2/3` 分类显示层；腰胸、中段控制器及骨骼保留原模板颜色，改用物体自身显示覆盖。
 
 ## 调用
 
@@ -68,7 +72,7 @@ rig = build(namespace="targetBody", targets=['|skeleton|waist', '|skeleton|waist
 
 ## 当前行为
 
-- 默认四节仍为四个曲线控制器、四根骨骼、45 个模板节点、121 条逻辑连接。
+- 默认四节仍为四个曲线控制器、四根骨骼、42 个模板节点、113 条逻辑连接。
 - 非四节按数量生成骨骼链及中段 zero / driven / connect / ctrl 层级；中段使用 spine01、spine02 等名字。
 - 保持总高度，初始间距为 `height / (segment_count - 1)`。
 - 非四节的中段胸部位移比例为 `i / (segment_count - 1)`，髋/胸旋转权重为 `(segment_count - 1 - i):i`。
@@ -91,6 +95,7 @@ rig = build(namespace="targetBody", targets=['|skeleton|waist', '|skeleton|waist
 | `data/body_v3.json` | v1.2.0 的选择顺序、匹配和输出约束约定 |
 | `data/body_v4.json` | v1.3.0 的世界运动烘焙与原曲线备份约定 |
 | `data/body_v5.json` | v1.3.1 保留目标及父级缩放动画输入的约定 |
+| `data/body_v6.json` | v1.3.2 不生成分类层、保留颜色的约定 |
 | `animation.py` | 世界定位器采样、联动控制器局部解算、曲线备份和失败恢复 |
 | `topology.py` | 由包内原版节点原型生成可调拓扑；默认四节兼容分支 |
 | `fitting.py` | 不同位置/朝向的初始参考系、矩阵链与端点旋转转换 |
@@ -99,7 +104,7 @@ rig = build(namespace="targetBody", targets=['|skeleton|waist', '|skeleton|waist
 | `controls.py` | 控制器、分组层级、用户参数 |
 | `skeleton.py` | 骨骼结构 |
 | `drivers.py` | 矩阵、旋转混合、约束节点和连线 |
-| `display.py` | 独立显示层 |
+| `display.py` | 显示组件兼容入口（不再生成模板显示层） |
 | `nodes.py` | 共用原生节点创建和属性恢复 |
 | `context.py` | 名称映射、创建清单、失败清理 |
 | `builder.py` | 分阶段组装、Undo、版本标签、返回结果 |
@@ -122,7 +127,7 @@ rig = build(namespace="targetBody", targets=['|skeleton|waist', '|skeleton|waist
 
 v1.1.0 已在 Maya 2024 实测 2、3、4、6、8、64 节，不同高度、端点位移/旋转、中段独立平移和弯曲、不同节数共存、非法参数拒绝，以及四节/六节 MCP 撤销重做。
 自动化入口：`scripts/run_custom_body_adjustable_tests.py`、`scripts/test_custom_body_mcp.py 6 10`。
-离线回归包含默认四节节点参数与连接同原版模板逐项相等检查。
+默认四节保留原版求解图；v1.3.2 移除三层及其连接，将原层颜色转为物体自身显示覆盖。
 
 v1.2.0：`scripts/run_custom_body_selection_tests.py` 验证普通物体、带蒙皮的骨骼链、不同朝向和非等距排列、创建后故障回滚。
 `scripts/test_custom_body_ui_mcp.py` 验证 UI 读取/调整顺序、按钮回调创建及独立请求撤销重做。

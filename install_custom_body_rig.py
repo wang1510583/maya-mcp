@@ -19,6 +19,7 @@ def install():
             package.__path__.remove(location)
         package.__path__.insert(0, location)
     importlib.invalidate_caches()
+    importlib.reload(importlib.import_module('maya_agent.rigs.ui_common'))
     import maya_agent.rigs.custom_body as body
     importlib.reload(body)
     for name in ('topology', 'definition', 'targets', 'fitting', 'context', 'nodes',
@@ -40,7 +41,10 @@ def install():
     else:
         cmds.shelfButton(parent=shelf, **options)
     cmds.shelfTabLayout(top, edit=True, selectTab=shelf)
-    cmds.saveShelf(shelf, str(Path(cmds.internalVar(userShelfDir=True)) / ('shelf_' + shelf + '.mel')))
+    # Maya appends .mel itself and only strips forward-slash directories from the proc name.
+    # Windows backslashes or a supplied extension corrupt both the shelf proc and startup name.
+    shelf_path = (Path(cmds.internalVar(userShelfDir=True)) / ('shelf_' + shelf)).as_posix()
+    cmds.saveShelf(shelf, shelf_path)
     return show_ui()
 
 

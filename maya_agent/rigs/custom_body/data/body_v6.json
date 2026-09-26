@@ -1,0 +1,21 @@
+{
+  "schema_version": 6,
+  "version": "1.3.2",
+  "base_template": "body_v1.json",
+  "min_segments": 2,
+  "max_segments": 64,
+  "default_segments": 4,
+  "default_height": 6.0,
+  "linear_unit": "cm",
+  "selection_order": "hips_to_chest",
+  "target_driver": "parentConstraint_maintainOffset",
+  "fit": "world_position_and_rotation",
+  "rotation_blend": "rest_frame_compensated_quaternion_average",
+  "animation_transfer": "temporary_world_locators_to_solved_local_control_TR",
+  "source_animation": "disconnect_and_archive_original_TR_curves",
+  "animation_scope": "sampled_time_keyed_TR_only",
+  "scale_animation": "preserve_original_time_curves_on_targets_and_ancestors",
+  "sampled_world_scale": "positive_uniform_without_shear",
+  "display_layers": "none",
+  "display_colors": "direct_DAG_overrides_from_template"
+}
