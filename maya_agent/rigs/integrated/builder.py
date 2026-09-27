@@ -32,6 +32,9 @@ def preflight(parts):
         frames=frame_range(options.get('start_frame',c.playbackOptions(q=True,minTime=True)),
                            options.get('end_frame',c.playbackOptions(q=True,maxTime=True)),options.get('sample_step',1)) if copy else []
         data[key]=dict(options=options,samples=samples,frames=frames,motion={})
+        if part['kind']=='leg':
+            from maya_agent.rigs.soft_leg.foot_placement import from_targets
+            data[key]['pivot_placement']=from_targets(samples[2]['node'],samples[3]['node'])
     if not data:raise ValueError('请先左键点击部位按钮，载入所选物体。')
     return data
 
@@ -124,6 +127,7 @@ def create_part(key,item,targets,namespace,chest=None):
     else:
         from maya_agent.rigs.soft_leg import build_from_selection as build
         kwargs['side']=part['side']
+        kwargs['pivot_placement']=item.get('pivot_placement')
     return build(**kwargs)
 
 

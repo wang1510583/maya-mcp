@@ -3,6 +3,13 @@ import json
 import math
 
 
+def default_pivots(ankle,toe):
+    """Unskinned fallback: a level plane at the toe, never the sloping bone line."""
+    direction=[b-a for a,b in zip(ankle,toe)]
+    return {key:[ankle[0]+ratio*direction[0],toe[1],ankle[2]+ratio*direction[2]]
+            for key,ratio in (('heel',-.5),('toe_end',1.5),('toe',.8))}
+
+
 def inspect(targets,allow_animation=False):
     import maya.cmds as c
     from maya_agent.rigs.custom_body.targets import inspect as inspect_targets
@@ -26,12 +33,14 @@ def inspect(targets,allow_animation=False):
     return samples,lengths
 
 
-def fit(rig,samples,lengths):
+def fit(rig,samples,lengths,pivot_placement=None):
     import maya.cmds as c
     from maya_agent.rigs.soft_limb.selection import _geometry
     from .adjustment import set_pivot,sync_guides
     ns=rig['namespace']+':'
     hip,knee,ankle,toe=[s['position'] for s in samples]
+    from .foot_placement import from_targets
+    placement=pivot_placement or from_targets(samples[2]['node'],samples[3]['node'])
     _,pole,straight=_geometry(samples[:3])
     for i,length in enumerate(lengths[:2],1):
         c.setAttr(ns+'strech_ik_foot1_L1.lenght_joint_'+str(i),length)
@@ -39,14 +48,14 @@ def fit(rig,samples,lengths):
     # Foot local X is the rolling axis; its world heading follows ankle -> toe.
     direction=[b-a for a,b in zip(ankle,toe)]
     heading=math.degrees(math.atan2(direction[0],direction[2]))
-    c.xform(ns+'foot_L1',ws=True,rotation=(-90,heading,0))
+    c.xform(ns+'foot_L1',ws=True,rotation=placement['rotation'] if placement else (-90,heading,0))
     set_pivot(ns+'foot_L1',ankle)
     set_pivot(ns+'tarsus_L1',toe)
     set_pivot(ns+'ik_connect_L1',ankle)
-    for key,ratio in (('heel_L1',-.5),('toe_end_L1',1.5),('toe_L1',.8)):
-        point=[a+ratio*d for a,d in zip(ankle,direction)]
-        point[1]=0.0
-        set_pivot(ns+key,point)
+    points=placement['points'] if placement else default_pivots(ankle,toe)
+    for key,point in points.items():
+        set_pivot(rig['controls'][key],point)
+    rig['pivot_placement']=placement or dict(method='toe_height_fallback',points=points)
     c.xform(ns+'Knee_L',ws=True,t=pole)
     c.xform(ns+'joint4',ws=True,t=toe)
     for sample,joint in zip(samples,rig['joints']):
@@ -66,7 +75,7 @@ def fit(rig,samples,lengths):
 
 
 def build_from_selection(targets=None,namespace='customLeg',drive_targets=True,copy_animation=False,
-                         start_frame=None,end_frame=None,sample_step=1.0,side='L'):
+                         start_frame=None,end_frame=None,sample_step=1.0,side='L',pivot_placement=None):
     import maya.cmds as c
     from . import _build_template,cleanup
     from .adjustment import edit_chunk
@@ -92,7 +101,7 @@ def build_from_selection(targets=None,namespace='customLeg',drive_targets=True,c
     with edit_chunk('CreateLegFromSelection'):
         try:
             rig=_build_template(namespace=namespace)
-            fit(rig,samples,lengths)
+            fit(rig,samples,lengths,pivot_placement=pivot_placement)
             if copy_animation:
                 from .animation import Transfer
                 transfer=Transfer(rig,samples,frames)

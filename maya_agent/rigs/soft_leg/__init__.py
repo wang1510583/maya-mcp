@@ -4,7 +4,7 @@ import math
 from pathlib import Path
 import re
 
-VERSION = '1.1.0'
+VERSION = '1.1.2'
 DATA = Path(__file__).parent / 'data'
 
 
@@ -78,9 +78,9 @@ def _build_template(namespace='customLeg', offset=(0.0, 0.0, 0.0)):
 
 
 def build_from_selection(targets=None, namespace='customLeg', drive_targets=True, copy_animation=False,
-                         start_frame=None,end_frame=None,sample_step=1.0,side='L'):
+                         start_frame=None,end_frame=None,sample_step=1.0,side='L',pivot_placement=None):
     from .selection import build_from_selection as create
-    return create(targets,namespace,drive_targets,copy_animation,start_frame,end_frame,sample_step,side)
+    return create(targets,namespace,drive_targets,copy_animation,start_frame,end_frame,sample_step,side,pivot_placement)
 
 
 build=build_from_selection

@@ -60,26 +60,34 @@ class PartButton(QtWidgets.QPushButton):
 
 
 class Diagram(QtWidgets.QWidget):
-    positions={'head':(.5,.10),'body':(.5,.45),'shoulder_R':(.29,.32),'shoulder_L':(.71,.32),
-               'arm_R':(.10,.50),'arm_L':(.90,.50),'leg_R':(.29,.85),'leg_L':(.71,.85)}
+    positions={'shoulder_R':(0,0),'head':(0,1),'shoulder_L':(0,2),
+               'arm_R':(1,0),'body':(1,1),'arm_L':(1,2),'leg_R':(2,0),'leg_L':(2,2)}
     def __init__(self,window):
         super().__init__();self.window=window;self.buttons={};self.lines={}
-        self.setMinimumSize(700,470)
+        self.setMinimumSize(330,240)
+        grid=QtWidgets.QGridLayout(self);grid.setContentsMargins(0,0,0,0);grid.setSpacing(5)
+        for index in range(3):grid.setColumnStretch(index,1);grid.setRowStretch(index,1)
         for key in PARTS:
             button=PartButton(key,self);self.buttons[key]=button
+            button.setMinimumSize(0,76);button.setSizePolicy(QtWidgets.QSizePolicy.Ignored,QtWidgets.QSizePolicy.Expanding)
+            grid.addWidget(button,*self.positions[key])
             button.clicked.connect(lambda checked=False,k=key:window.safe(lambda:window.load(k)))
             button.settings.connect(lambda k:window.safe(lambda:window.details(k)))
             button.unloaded.connect(lambda k:window.safe(lambda:window.unload(k)))
+        self.create_button=QtWidgets.QPushButton('开始创建',self)
+        self.create_button.setMinimumSize(0,60)
+        self.create_button.setSizePolicy(QtWidgets.QSizePolicy.Ignored,QtWidgets.QSizePolicy.Expanding)
+        self.create_button.setCursor(QtCore.Qt.PointingHandCursor)
+        self.create_button.setStyleSheet('QPushButton {background:#397b80;color:white;font-size:20px;font-weight:bold;border:0;} QPushButton:hover {background:#478e94;} QPushButton:disabled {background:#656565;color:#999;}')
+        self.create_button.clicked.connect(lambda:window.safe(window.create))
+        grid.addWidget(self.create_button,2,1)
         self.refresh()
     def refresh(self):
         for key,button in self.buttons.items():
             n=len(_state[key]['uuids']);color='#8de1c3' if n else '#f0f0f0'
             button.setText(PARTS[key]['label']+'\n'+('● 已载入 '+str(n) if n else '○ 未载入'))
-            button.setStyleSheet('QPushButton { color:'+color+'; background:transparent; border:0; font-size:18px; font-weight:600; } QPushButton:hover { background:#686868; border-radius:8px; }')
+            button.setStyleSheet('QPushButton { color:'+color+'; background:#545454; border:0; font-size:18px; font-weight:600; } QPushButton:hover { background:#686868; }')
         self.update()
-    def resizeEvent(self,event):
-        for key,(x,y) in self.positions.items():self.buttons[key].setGeometry(round(self.width()*x)-65,round(self.height()*y)-32,130,64)
-        super().resizeEvent(event)
 
 
 class IntegratedWindow(QtWidgets.QDialog):
@@ -89,36 +97,37 @@ class IntegratedWindow(QtWidgets.QDialog):
         super().__init__(wrapInstance(int(OpenMayaUI.MQtUtil.mainWindow()),QtWidgets.QWidget))
         self.setObjectName('IntegratedCharacterRigWindow');self.setWindowTitle('集成角色绑定 v'+VERSION)
         self.setWindowFlags(self.windowFlags()|QtCore.Qt.Window)
-        self.resize(780,820);self.last_result=None;self.details_windows={}
+        self.resize(420,520);self.last_result=None;self.details_windows={}
         c.selectPref(trackSelectionOrder=True)
         self.setStyleSheet('QDialog { background:#595959; color:#ededed; } QLabel {color:#ededed;} QLineEdit {background:#414141;color:white;padding:6px;border:1px solid #777;}')
-        layout=QtWidgets.QVBoxLayout(self);layout.setContentsMargins(20,16,20,16)
-        label=QtWidgets.QLabel('左键载入 · 右键设置 · 中键清空载入 · 自动连接部位起点');layout.addWidget(label)
+        layout=QtWidgets.QVBoxLayout(self);layout.setContentsMargins(12,12,12,12);layout.setSpacing(9)
+        label=QtWidgets.QLabel('左键载入 · 右键设置 · 中键清空');layout.addWidget(label)
         row=QtWidgets.QHBoxLayout();row.addWidget(QtWidgets.QLabel('名称前缀'))
         self.namespace=QtWidgets.QLineEdit('customCharacter');row.addWidget(self.namespace)
         clear=QtWidgets.QPushButton('清空载入');clear.clicked.connect(self.clear);row.addWidget(clear);layout.addLayout(row)
         root_row=QtWidgets.QHBoxLayout()
         self.root_button=PartButton('_root',self)
         self.root_button.setToolTip('左键载入人物总控制器：整体移动包含 IK 手脚。胸腰局部跟随请用下面两个按钮。\n中键：清空通用根载入。')
-        self.root_button.clicked.connect(lambda:self.safe(self.load_root));root_row.addWidget(self.root_button)
+        self.root_button.clicked.connect(lambda:self.safe(self.load_root));root_row.addWidget(self.root_button,1)
         self.root_button.unloaded.connect(lambda _:self.clear_root())
-        root_clear=QtWidgets.QPushButton('清除根');root_clear.clicked.connect(self.clear_root);root_row.addWidget(root_clear)
-        layout.addLayout(root_row)
         self.follow_buttons={}
         for key in ('chest','hips'):
             button=PartButton(key,self);self.follow_buttons[key]=button
-            button.setMinimumHeight(30)
             example='spine_03；用于肩膀、手臂及头颈' if key=='chest' else 'pelvis；只带动腿部髋起点'
             button.setToolTip('左键载入一个骨骼或物体，例如 '+example+'。\n有新建身体时自动使用身体控制器；中键清空载入。')
             button.clicked.connect(lambda checked=False,k=key:self.safe(lambda:self.load_follow(k)))
             button.unloaded.connect(self.clear_follow)
-            layout.addWidget(button)
+            root_row.addWidget(button,1)
+        for button in [self.root_button]+list(self.follow_buttons.values()):
+            button.setMinimumSize(0,68)
+            button.setSizePolicy(QtWidgets.QSizePolicy.Ignored,QtWidgets.QSizePolicy.Fixed)
+            button.setStyleSheet('QPushButton {color:#f0a34a;background:transparent;border:0;font-size:13px;font-weight:600;} QPushButton:hover {background:#686868;}')
+        layout.addLayout(root_row)
         self.diagram=Diagram(self);layout.addWidget(self.diagram,1)
-        hint=QtWidgets.QLabel('部位总组分开：肩膀接胸部，手臂起点接肩膀，髋部接腰部，脚 IK 独立。\n头部独立旋转，颈部混合胸与头的方向；多空间在右键设置中。')
+        self.create_button=self.diagram.create_button
+        hint=QtWidgets.QLabel('通用根控制整体移动；胸 / 腰用于部位跟随。\n右键设置动画、多空间及腿部支点调整。')
+        hint.setWordWrap(True)
         hint.setStyleSheet('color:#d0d0d0;font-size:12px;');layout.addWidget(hint)
-        self.create_button=QtWidgets.QPushButton('开始创建');self.create_button.setMinimumHeight(48)
-        self.create_button.setStyleSheet('background:#397b80;color:white;font-size:21px;font-weight:bold;border-radius:5px;')
-        self.create_button.clicked.connect(lambda:self.safe(self.create));layout.addWidget(self.create_button)
         self.status=QtWidgets.QLabel('尚未载入部位。');self.status.setWordWrap(True);self.status.setMinimumHeight(40);layout.addWidget(self.status)
         self.refresh_root()
         self.refresh_follow()
@@ -138,7 +147,17 @@ class IntegratedWindow(QtWidgets.QDialog):
         self.diagram.refresh();self.message('已清空所有载入部位；场景不受影响。')
     def refresh_root(self):
         name=_root_state['name']
-        self.root_button.setText('载入通用根骨骼 / 控制器 · '+('已载入 '+name.rsplit('|',1)[-1] if name else '未载入'))
+        self.anchor_text(self.root_button,'载入根',name)
+    def anchor_text(self,button,label,name):
+        status='已载入 '+name.rsplit('|',1)[-1] if name else '○ 未载入'
+        status=button.fontMetrics().elidedText(status,QtCore.Qt.ElideMiddle,max(button.width()-12,84))
+        button.setText(label+'\n'+status)
+        help_text=button.toolTip().split('\n对象：',1)[0]
+        button.setToolTip(help_text+('\n对象：'+name if name else ''))
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        if hasattr(self,'follow_buttons'):
+            self.refresh_root();self.refresh_follow()
     def load_root(self):
         names=c.ls(sl=True,long=True) or []
         if len(names)!=1 or c.nodeType(names[0]) not in ('joint','transform'):raise ValueError('请只选择一个通用根控制器。')
@@ -150,7 +169,7 @@ class IntegratedWindow(QtWidgets.QDialog):
     def refresh_follow(self):
         for key,button in self.follow_buttons.items():
             name=_follow_state[key]['name']
-            button.setText('载入'+FOLLOW_LABELS[key]+' · '+('● 已载入 '+name.rsplit('|',1)[-1] if name else '○ 未载入'))
+            self.anchor_text(button,'载入胸' if key=='chest' else '载入腰',name)
     def load_follow(self,key):
         names=c.ls(sl=True,long=True) or []
         if len(names)!=1 or c.nodeType(names[0]) not in ('joint','transform'):
