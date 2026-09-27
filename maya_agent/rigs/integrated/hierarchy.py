@@ -14,12 +14,14 @@ def sampled_reference(driver,item,namespace,root,name):
     return reference
 
 
-def apply(built,data,root):
+def apply(built,data,root,chest_follow=None,hips_follow=None):
     import maya.cmds as c
     body=built.get('body');pending=[];links=[]
+    chest=body['controls']['chest'] if body else chest_follow
+    hips=body['controls']['hips'] if body else hips_follow
     for key,rig in built.items():
-        if key.startswith('shoulder_') and body:
-            chest=body['controls']['chest'];ctrl=rig['controls']['clavicle']
+        if key.startswith('shoulder_') and chest:
+            ctrl=rig['controls']['clavicle']
             zero=c.listRelatives(ctrl,p=True,fullPath=True)[0]
             ref=sampled_reference(chest,data[key],rig['namespace'],root,'chest_attachment_reference')
             group=c.createNode('transform',name=rig['namespace']+':chest_attachment',parent=chest)
@@ -30,10 +32,10 @@ def apply(built,data,root):
     for key,rig in built.items():
         if key.startswith('arm_'):
             shoulder=built.get('shoulder_'+rig['side'])
-            driver=shoulder['controls']['clavicle'] if shoulder else body['controls']['chest'] if body else None
+            driver=shoulder['controls']['clavicle'] if shoulder else chest
             control=rig['controls']['shoulder_fk'];label='shoulder'
         elif key.startswith('leg_'):
-            driver=body['controls']['hips'] if body else None
+            driver=hips
             control=rig['controls']['hip'];label='hip'
         else:continue
         if not driver:continue

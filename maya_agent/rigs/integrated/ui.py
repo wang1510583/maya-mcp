@@ -5,6 +5,8 @@ from . import PARTS,VERSION
 
 _instance=globals().get('_instance')
 _root_state=globals().get('_root_state',dict(uuid=None,name=None))
+_follow_state=globals().get('_follow_state',{key:dict(uuid=None,name=None) for key in ('chest','hips')})
+FOLLOW_LABELS={'chest':'胸部跟随对象','hips':'腰部跟随对象'}
 _state=globals().get('_state',{key:dict(targets=[],uuids=[],connected=False,name=key,drive_targets=True,
                  copy_animation=True,sample_step=1.0) for key in PARTS})
 for _key in PARTS:
@@ -87,7 +89,7 @@ class IntegratedWindow(QtWidgets.QDialog):
         super().__init__(wrapInstance(int(OpenMayaUI.MQtUtil.mainWindow()),QtWidgets.QWidget))
         self.setObjectName('IntegratedCharacterRigWindow');self.setWindowTitle('集成角色绑定 v'+VERSION)
         self.setWindowFlags(self.windowFlags()|QtCore.Qt.Window)
-        self.resize(780,760);self.last_result=None;self.details_windows={}
+        self.resize(780,820);self.last_result=None;self.details_windows={}
         c.selectPref(trackSelectionOrder=True)
         self.setStyleSheet('QDialog { background:#595959; color:#ededed; } QLabel {color:#ededed;} QLineEdit {background:#414141;color:white;padding:6px;border:1px solid #777;}')
         layout=QtWidgets.QVBoxLayout(self);layout.setContentsMargins(20,16,20,16)
@@ -97,11 +99,20 @@ class IntegratedWindow(QtWidgets.QDialog):
         clear=QtWidgets.QPushButton('清空载入');clear.clicked.connect(self.clear);row.addWidget(clear);layout.addLayout(row)
         root_row=QtWidgets.QHBoxLayout()
         self.root_button=PartButton('_root',self)
-        self.root_button.setToolTip('左键载入一个骨骼或控制器：各部位平级跟随通用根，彼此不关联。\n中键：清空通用根载入。')
+        self.root_button.setToolTip('左键载入人物总控制器：整体移动包含 IK 手脚。胸腰局部跟随请用下面两个按钮。\n中键：清空通用根载入。')
         self.root_button.clicked.connect(lambda:self.safe(self.load_root));root_row.addWidget(self.root_button)
         self.root_button.unloaded.connect(lambda _:self.clear_root())
         root_clear=QtWidgets.QPushButton('清除根');root_clear.clicked.connect(self.clear_root);root_row.addWidget(root_clear)
         layout.addLayout(root_row)
+        self.follow_buttons={}
+        for key in ('chest','hips'):
+            button=PartButton(key,self);self.follow_buttons[key]=button
+            button.setMinimumHeight(30)
+            example='spine_03；用于肩膀、手臂及头颈' if key=='chest' else 'pelvis；只带动腿部髋起点'
+            button.setToolTip('左键载入一个骨骼或物体，例如 '+example+'。\n有新建身体时自动使用身体控制器；中键清空载入。')
+            button.clicked.connect(lambda checked=False,k=key:self.safe(lambda:self.load_follow(k)))
+            button.unloaded.connect(self.clear_follow)
+            layout.addWidget(button)
         self.diagram=Diagram(self);layout.addWidget(self.diagram,1)
         hint=QtWidgets.QLabel('部位总组分开：肩膀接胸部，手臂起点接肩膀，髋部接腰部，脚 IK 独立。\n头部独立旋转，颈部混合胸与头的方向；多空间在右键设置中。')
         hint.setStyleSheet('color:#d0d0d0;font-size:12px;');layout.addWidget(hint)
@@ -110,6 +121,7 @@ class IntegratedWindow(QtWidgets.QDialog):
         self.create_button.clicked.connect(lambda:self.safe(self.create));layout.addWidget(self.create_button)
         self.status=QtWidgets.QLabel('尚未载入部位。');self.status.setWordWrap(True);self.status.setMinimumHeight(40);layout.addWidget(self.status)
         self.refresh_root()
+        self.refresh_follow()
     def message(self,text):self.status.setText(text)
     def safe(self,callback):
         try:return callback()
@@ -122,6 +134,7 @@ class IntegratedWindow(QtWidgets.QDialog):
     def clear(self):
         for row in _state.values():row['targets']=[];row['uuids']=[];row['load_revision']=row.get('load_revision',0)+1
         self.clear_root()
+        for key in _follow_state:self.clear_follow(key)
         self.diagram.refresh();self.message('已清空所有载入部位；场景不受影响。')
     def refresh_root(self):
         name=_root_state['name']
@@ -130,10 +143,29 @@ class IntegratedWindow(QtWidgets.QDialog):
         names=c.ls(sl=True,long=True) or []
         if len(names)!=1 or c.nodeType(names[0]) not in ('joint','transform'):raise ValueError('请只选择一个通用根控制器。')
         _root_state.update(uuid=c.ls(names[0],uuid=True)[0],name=names[0]);self.refresh_root();self.diagram.refresh()
-        self.message('通用根已载入；各部位将平级跟随它，彼此不关联。')
+        self.message('通用根已载入；整体移动包含 IK 手脚。胸腰局部跟随请使用下面两个按钮。')
     def clear_root(self):
         _root_state.update(uuid=None,name=None);self.refresh_root();self.diagram.refresh()
         self.message('已清空通用根载入；场景物体保留。')
+    def refresh_follow(self):
+        for key,button in self.follow_buttons.items():
+            name=_follow_state[key]['name']
+            button.setText('载入'+FOLLOW_LABELS[key]+' · '+('● 已载入 '+name.rsplit('|',1)[-1] if name else '○ 未载入'))
+    def load_follow(self,key):
+        names=c.ls(sl=True,long=True) or []
+        if len(names)!=1 or c.nodeType(names[0]) not in ('joint','transform'):
+            raise ValueError('请只选择一个'+FOLLOW_LABELS[key]+'。')
+        _follow_state[key].update(uuid=c.ls(names[0],uuid=True)[0],name=names[0]);self.refresh_follow()
+        self.message('已载入'+FOLLOW_LABELS[key]+'；单独创建部位时使用，有身体时自动使用新建身体。')
+    def clear_follow(self,key):
+        _follow_state[key].update(uuid=None,name=None);self.refresh_follow()
+        self.message('已清空'+FOLLOW_LABELS[key]+'；场景物体保留。')
+    def follow_target(self,key):
+        identity=_follow_state[key]['uuid']
+        if not identity:return None
+        found=c.ls(identity,long=True) or []
+        if len(found)!=1:raise ValueError(FOLLOW_LABELS[key]+'已删除，请重新载入。')
+        return found[0]
     def unload(self,key):
         _state[key]['targets']=[];_state[key]['uuids']=[];self.diagram.refresh()
         _state[key]['load_revision']=_state[key].get('load_revision',0)+1
@@ -212,7 +244,10 @@ class IntegratedWindow(QtWidgets.QDialog):
                 found=c.ls(_root_state['uuid'],long=True) or []
                 if len(found)!=1:raise ValueError('通用根控制器已删除，请重新载入。')
                 root=found[0]
-            self.last_result=build(config,namespace=self.namespace.text().strip(),general_root=root)
+            chest=self.follow_target('chest') if 'body' not in config else None
+            hips=self.follow_target('hips') if 'body' not in config else None
+            self.last_result=build(config,namespace=self.namespace.text().strip(),general_root=root,
+                                   chest_follow=chest,hips_follow=hips)
             self.message('已创建 '+str(len(self.last_result['parts']))+' 个部位，已按参考结构连接控制器和部位起点。 Ctrl+Z 可整体撤销。')
             return self.last_result
         finally:self.create_button.setEnabled(True)

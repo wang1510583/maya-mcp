@@ -28,11 +28,11 @@ def create(control,driver,label,orientation_only=False):
     return dict(control=control,driver=driver,group=group,constraint=constraint,attribute=plug,label=label,orientation_only=orientation_only)
 
 
-def apply(built,data,world):
+def apply(built,data,world,chest_follow=None,hips_follow=None):
     result=[]
     body=built.get('body')
-    chest=body['controls']['chest'] if body else world
-    hips=body['controls']['hips'] if body else world
+    chest=body['controls']['chest'] if body else chest_follow or world
+    hips=body['controls']['hips'] if body else hips_follow or world
     for key,rig in built.items():
         options=data[key]['options'];ns=rig['namespace']+':'
         if key=='body' and options.get('space_chest'):result.append(create(rig['controls']['chest'],hips,'腰部'))

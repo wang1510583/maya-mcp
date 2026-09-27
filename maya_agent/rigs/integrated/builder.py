@@ -145,13 +145,29 @@ def container(rig,parent,body=False):
     return rig['root']
 
 
-def build(parts,namespace='customCharacter',general_root=None):
+def validate_follow(node,data,label):
+    import maya.cmds as c
+    if node is None:return None
+    found=c.ls(node,long=True) or []
+    if len(found)!=1 or c.nodeType(found[0]) not in ('transform','joint'):
+        raise ValueError(label+'必须是唯一的骨骼或物体。')
+    node=found[0]
+    for item in data.values():
+        if any(node==s['node'] or node.startswith(s['node']+'|') for s in item['samples']):
+            raise ValueError(label+'不能是待创建目标或其子级，这会产生循环。')
+    return node
+
+
+def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,hips_follow=None):
     import maya.cmds as c
     from maya_agent.rigs.custom_body.animation import Transfer
     from maya_agent.rigs.custom_body.targets import restore
     from maya_agent.rigs.soft_leg import cleanup
     if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',namespace):raise ValueError('名称前缀需要英文字母、数字或下划线，不能以数字开头。')
     data=preflight(parts)
+    # A newly built body owns the torso anchors; external anchors are for partial rigs.
+    chest_follow=validate_follow(chest_follow,data,'胸部跟随对象') if 'body' not in data else None
+    hips_follow=validate_follow(hips_follow,data,'腰部跟随对象') if 'body' not in data else None
     space_root=general_root
     if general_root:
         found=c.ls(general_root,long=True) or []
@@ -182,7 +198,7 @@ def build(parts,namespace='customCharacter',general_root=None):
             if c.namespace(exists=part_ns):raise ValueError('部位名称重复或已存在：'+part_ns)
             owned.append(part_ns)
             if key=='head':
-                chest=built['body']['controls']['chest'] if 'body' in built else general_root
+                chest=built['body']['controls']['chest'] if 'body' in built else chest_follow or general_root
                 rig=create_part(key,item,item['proxies'],part_ns,chest=chest)
             else:rig=create_part(key,item,item['proxies'],part_ns)
             built[key]=rig
@@ -201,12 +217,12 @@ def build(parts,namespace='customCharacter',general_root=None):
             c.parent(rig['root'],group,relative=True)
             rig['attachment']=dict(group=group,parent=general_root)
         from .hierarchy import apply as apply_hierarchy,finish as finish_hierarchy
-        hierarchy,pending=apply_hierarchy(built,data,root)
+        hierarchy,pending=apply_hierarchy(built,data,root,chest_follow=chest_follow,hips_follow=hips_follow)
         from .spaces import apply as apply_spaces
         if not space_root:
             space_root=c.createNode('transform',name=namespace+':world_space',parent=root)
             c.setAttr(space_root+'.inheritsTransform',False);c.setAttr(space_root+'.visibility',False)
-        spaces=apply_spaces(built,data,space_root)
+        spaces=apply_spaces(built,data,space_root,chest_follow=chest_follow,hips_follow=hips_follow)
         finish_hierarchy(built,data,root,pending)
         # Detach ALL source curves before driving any source joint. This avoids
         # interfering with children whose original parent belongs to another part.
@@ -239,6 +255,7 @@ def build(parts,namespace='customCharacter',general_root=None):
                     skipped=[k for k in PARTS if k not in built],reference_body=reference,
                     original_animation_backups=[t.backup for t in transfers],spaces=spaces,space_root=space_root,hierarchy=hierarchy)
         result['general_root']=general_root
+        result['external_follow']=dict(chest=chest_follow,hips=hips_follow)
         from .display import apply as organize_display
         result['display']=organize_display(result)
         c.addAttr(root,ln='integratedRigData',dt='string')
