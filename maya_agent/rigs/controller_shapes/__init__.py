@@ -103,7 +103,7 @@ def capture(rig, path):
     for key, part in rig['parts'].items():
         targets = [m['target'] for m in part['original_target_mapping']]
         parts[key] = dict(metrics=measure(key, targets),
-                          controls={role: capture_control(node) for role,node in part['controls'].items()
+                          controls={role: capture_control(part.get('live_controls',{}).get(role,node)) for role,node in part['controls'].items()
                                     if role not in HELPERS})
     data = dict(schema_version=1, version=VERSION, linear_unit='cm', parts=parts)
     path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)

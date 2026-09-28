@@ -24,6 +24,7 @@ class LegRigWindow:
         self.drive_targets=c.checkBox(label='驱动所选骨骼 / 物体',value=True,changeCommand=self.toggle_animation)
         self.copy_animation=c.checkBox(label='拷贝动画至控制器',value=False,changeCommand=self.toggle_animation)
         self.animation_fields,self.frame_bounds,self.sample_step=layout.animation_fields(c)
+        self.live_alignment=c.checkBox(label='实时对齐（拖动 / 播放时贴合骨骼）',value=True)
         if extra_options:extra_options()
         self.create_button=layout.create_button(c,'按当前选择一键创建腿部系统',self.create)
         c.separator(height=10,style='in')
@@ -78,7 +79,8 @@ class LegRigWindow:
                 start_frame=c.floatFieldGrp(self.frame_bounds,q=True,value1=True),
                 end_frame=c.floatFieldGrp(self.frame_bounds,q=True,value2=True),
                 sample_step=c.floatFieldGrp(self.sample_step,q=True,value1=True),
-                side='R' if c.checkBox(self.right_side,q=True,value=True) else 'L')
+                side='R' if c.checkBox(self.right_side,q=True,value=True) else 'L',
+                live_alignment=c.checkBox(self.live_alignment,q=True,value=True))
             rig=self.last_result
             message='已创建 {} {}腿部：{}\n大腿 {:.3f} cm / 小腿 {:.3f} cm / 脚部 {:.3f} cm。'.format(
                 rig['side'],'右侧' if rig['side']=='R' else '左侧',rig['namespace'],*rig['lengths'])
@@ -86,7 +88,7 @@ class LegRigWindow:
             if rig.get('animation_transfer'):message+='\n动画已转移：{} 个采样帧；原曲线已备份。'.format(rig['animation_transfer']['sample_count'])
             c.scrollField(self.status,e=True,text=message)
             self.refresh_rigs(rig['namespace'])
-            c.select(rig['controls']['foot'],r=True)
+            c.select(rig.get('live_controls',{}).get('foot',rig['controls']['foot']),r=True)
             return rig
         except Exception as exc:
             c.scrollField(self.status,e=True,text=str(exc));c.warning(str(exc))
@@ -164,6 +166,8 @@ class LegRigWindow:
 
 
 def show():
+    from maya_agent.rigs.live_edit import install
+    install()
     global _instance
     _instance=LegRigWindow()
     return _instance

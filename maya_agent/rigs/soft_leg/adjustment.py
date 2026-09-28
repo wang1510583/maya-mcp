@@ -90,8 +90,30 @@ def sync_guides(rig):
     for key in KEYS:
         guide=data['guides'][key]
         guide_lock(guide,False)
-        c.xform(guide,ws=True,t=c.xform(data['controls'][key],q=True,ws=True,rp=True))
+        c.xform(guide,ws=True,t=display_pivot(root,data,key))
         guide_lock(guide,not c.getAttr(root+'.adjustmentMode'))
+
+
+def display_pivot(root,data,key,position=None):
+    """Map guide points between the solved foot and its hidden input frame."""
+    import maya.cmds as c
+    import maya.api.OpenMaya as om
+    node=data['controls'][key]
+    live=json.loads(c.getAttr(root+'.liveAlignmentData')) if c.objExists(root+'.liveAlignmentData') else {}
+    if key in live.get('toe_follow',{}) and c.getAttr(root+'.liveAlignment'):
+        ball=live['toe_follow'][key]
+        delta=(om.MMatrix(c.getAttr(ball+'.parentInverseMatrix[0]'))*
+               om.MMatrix(c.getAttr(ball+'.matrix'))*om.MMatrix(c.getAttr(ball+'.parentMatrix[0]')))
+        if position is None:
+            return list(om.MPoint(c.xform(node,q=True,ws=True,rp=True))*delta)[:3]
+        return list(om.MPoint(position)*delta.inverse())[:3]
+    if key in live.get('pivot_sources',{}) and c.getAttr(root+'.liveAlignment'):
+        solved=om.MMatrix(c.xform(live['targets'][key],q=True,ws=True,m=True))
+        if position is None:
+            return list(om.MPoint(c.getAttr(node+'.rotatePivot')[0])*solved)[:3]
+        point=om.MPoint(position)*solved.inverse()*om.MMatrix(c.xform(node,q=True,ws=True,m=True))
+        return list(point)[:3]
+    return position if position is not None else c.xform(node,q=True,ws=True,rp=True)
 
 
 def set_pivot(node,position):
@@ -132,8 +154,11 @@ def set_mode(rig,enabled,cancel=False):
             positions={k:c.xform(data['guides'][k],q=True,ws=True,t=True) for k in KEYS}
             if not all(math.isfinite(v) for p in positions.values() for v in p):
                 raise ValueError('支点位置必须是有限数字。')
-            changed=[k for k in KEYS if math.dist(positions[k],c.xform(data['controls'][k],q=True,ws=True,rp=True))>1e-8]
-            nodes=[n for n in c.ls(ns+':*',type='transform') if c.objExists(n)]
+            changed=[k for k in KEYS if math.dist(positions[k],display_pivot(root,data,k))>1e-8]
+            positions={k:display_pivot(root,data,k,p) for k,p in positions.items()}
+            # Visible handles intentionally move with the edited pivot. Actual
+            # solver inputs, output joints and driven targets must stay fixed.
+            nodes=[n for n in c.ls(ns+':*',type='transform') if c.objExists(n) and not c.objExists(n+'.liveInput')]
             matrices={n:c.xform(n,q=True,ws=True,m=True) for n in nodes}
             snapshots={n:{a:c.getAttr(n+'.'+a)[0] for a in PIVOTS} for n in data['controls'].values()}
             shapes={s:c.getAttr(s+'.localPosition')[0] for n in data['controls'].values()

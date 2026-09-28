@@ -11,6 +11,8 @@ def install():
     if str(root) not in sys.path:sys.path.insert(0,str(root))
     importlib.invalidate_caches()
     importlib.reload(importlib.import_module('maya_agent.rigs.controller_shapes'))
+    for name in ('maya_agent.rigs.live_rotation','maya_agent.rigs.live_arm_fk','maya_agent.rigs.live_arm_manual','maya_agent.rigs.live_edit','maya_agent.rigs.live_alignment'):
+        importlib.reload(importlib.import_module(name))
     importlib.reload(importlib.import_module('maya_agent.rigs.ui_common'))
     for name in ('maya_agent.rigs.soft_limb.native','maya_agent.rigs.soft_limb.sides','maya_agent.rigs.soft_leg',
                  'maya_agent.rigs.soft_leg.pivot_animation','maya_agent.rigs.soft_leg.adjustment','maya_agent.rigs.soft_leg.foot_placement','maya_agent.rigs.soft_leg.selection',

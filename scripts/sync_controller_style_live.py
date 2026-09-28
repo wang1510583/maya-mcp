@@ -49,9 +49,10 @@ def sync(root):
         left=rig['parts'][kind+'_L'];right=rig['parts'][kind+'_R']
         for side,part in (('L',left),('R',right)):
             template['parts'][kind+'_'+side]['metrics']=art.measure(kind+'_'+side,[m['target'] for m in part['original_target_mapping']])
-        for role,node in left['controls'].items():
+        for role,input_node in left['controls'].items():
             if role in art.HELPERS:continue
-            destination=right['controls'][role]
+            node=left.get('live_controls',{}).get(role,input_node)
+            destination=right.get('live_controls',{}).get(role,right['controls'][role])
             source=art.capture_control(node);old=art.capture_control(destination)
             assert len(source['shapes'])==len(old['shapes']),(kind,role,'shape count')
             for a,b,s in zip(source['shapes'],old['shapes'],_shapes(destination)):

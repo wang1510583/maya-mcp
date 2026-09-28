@@ -75,7 +75,7 @@ def fit(rig,samples,lengths,pivot_placement=None):
 
 
 def build_from_selection(targets=None,namespace='customLeg',drive_targets=True,copy_animation=False,
-                         start_frame=None,end_frame=None,sample_step=1.0,side='L',pivot_placement=None):
+                         start_frame=None,end_frame=None,sample_step=1.0,side='L',pivot_placement=None,live_alignment=False):
     import maya.cmds as c
     from . import _build_template,cleanup
     from .adjustment import edit_chunk
@@ -120,6 +120,10 @@ def build_from_selection(targets=None,namespace='customLeg',drive_targets=True,c
             data['controls']={k:rig['controls'][k] for k in data['controls']}
             c.setAttr(rig['root']+'.legSetupData',lock=False)
             c.setAttr(rig['root']+'.legSetupData',json.dumps(data),type='string',lock=True)
+            if live_alignment:
+                if transfer:c.currentTime(transfer.time)
+                from maya_agent.rigs.live_alignment import enable
+                enable(rig,'leg')
             return rig
         except Exception:
             if transfer:transfer.release_backup()

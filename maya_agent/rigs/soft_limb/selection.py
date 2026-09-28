@@ -115,7 +115,7 @@ def connect(rig, samples, drivers=None):
 
 
 def build_from_selection(targets=None, namespace='customArm', drive_targets=True, copy_animation=False,
-                         start_frame=None, end_frame=None, sample_step=1.0, side='L'):
+                         start_frame=None, end_frame=None, sample_step=1.0, side='L', live_alignment=False):
     import maya.cmds as c
     from . import build
     from maya_agent.rigs.custom_body.targets import restore
@@ -154,6 +154,10 @@ def build_from_selection(targets=None, namespace='customArm', drive_targets=True
         sides.apply(rig, side)
         from maya_agent.rigs.controller_shapes import apply as apply_shapes
         apply_shapes(rig, 'arm_'+side, metrics=dict(lengths=lengths, method='chain_lengths'))
+        if live_alignment:
+            if transfer:c.currentTime(transfer.time)
+            from maya_agent.rigs.live_alignment import enable
+            enable(rig,'arm')
         return rig
     except Exception:
         if transfer:transfer.release_backup()

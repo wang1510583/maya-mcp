@@ -15,6 +15,18 @@ SCALARS=tuple(a+axis for a in ('rotate','rotateAxis','scale') for axis in 'XYZ')
 def source(plug):return c.connectionInfo(plug,sourceFromDestination=True) or ''
 
 
+def animation_source(plug):
+    """Resolve the tool's live channel relay; never duplicate its transform."""
+    src=source(plug)
+    if not src:return ''
+    node=src.split('.')[0]
+    if c.objExists(node+'.liveInput'):
+        inputs=c.listConnections(node+'.liveInput',s=True,d=False) or []
+        if inputs and c.ls(inputs[0],long=True)==c.ls(plug.split('.')[0],long=True):
+            return source(src)
+    return src
+
+
 def snapshot(node):
     values={a:c.getAttr(node+'.'+a)[0] for a in PIVOTS}
     edges={}
@@ -30,7 +42,7 @@ def snapshot(node):
 def _validate(state):
     node=state['node']
     for attr in SCALARS:
-        src=source(node+'.'+attr)
+        src=animation_source(node+'.'+attr)
         if not src:continue
         curve=src.split('.')[0]
         if c.nodeType(curve) not in ('animCurveTA','animCurveTL','animCurveTU'):
@@ -81,7 +93,7 @@ class Edit:
         set_pivot(node,position)
         new=self.reference(node,'After')
         for attr in SCALARS:
-            src=source(node+'.'+attr)
+            src=animation_source(node+'.'+attr)
             if not src:continue
             curve=src.split('.')[0]
             clone=c.duplicate(curve,name=self.prefix+node.rsplit(':',1)[-1]+'_'+attr+'_pivotReference',

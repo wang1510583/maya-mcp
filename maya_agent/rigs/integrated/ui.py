@@ -6,6 +6,7 @@ from . import PARTS,VERSION
 _instance=globals().get('_instance')
 _root_state=globals().get('_root_state',dict(uuid=None,name=None))
 _follow_state=globals().get('_follow_state',{key:dict(uuid=None,name=None) for key in ('chest','hips')})
+_global_options=globals().get('_global_options',dict(copy_animation=True,live_alignment=True))
 FOLLOW_LABELS={'chest':'胸部跟随对象','hips':'腰部跟随对象'}
 _state=globals().get('_state',{key:dict(targets=[],uuids=[],connected=False,name=key,drive_targets=True,
                  copy_animation=True,sample_step=1.0) for key in PARTS})
@@ -23,6 +24,8 @@ SPACE_OPTIONS={'head':[('space_head','头部多空间 → 胸部')],
 # Populate creation options even when the user never opens the details panel.
 # Keep later explicit unchecks when the module is reloaded.
 for _key,_row in _state.items():
+    _row['copy_animation']=_global_options['copy_animation']
+    if PARTS[_key]['kind'] in ('arm','leg'):_row['live_alignment']=_global_options['live_alignment']
     for _option,_label in SPACE_OPTIONS.get(_key,SPACE_OPTIONS.get(PARTS[_key]['kind'],[])):
         _row.setdefault(_option,True)
 
@@ -125,7 +128,8 @@ class IntegratedWindow(QtWidgets.QDialog):
         layout.addLayout(root_row)
         self.diagram=Diagram(self);layout.addWidget(self.diagram,1)
         self.create_button=self.diagram.create_button
-        hint=QtWidgets.QLabel('通用根控制整体移动；胸 / 腰用于部位跟随。\n右键设置动画、多空间及腿部支点调整。')
+        self.add_global_options()
+        hint=QtWidgets.QLabel('通用根控制整体移动；胸 / 腰用于部位跟随。\n右键设置动画范围、多空间及腿部支点调整。')
         hint.setWordWrap(True)
         hint.setStyleSheet('color:#d0d0d0;font-size:12px;');layout.addWidget(hint)
         self.status=QtWidgets.QLabel('尚未载入部位。');self.status.setWordWrap(True);self.status.setMinimumHeight(40);layout.addWidget(self.status)
@@ -135,6 +139,32 @@ class IntegratedWindow(QtWidgets.QDialog):
     def safe(self,callback):
         try:return callback()
         except Exception as exc:self.message(str(exc));c.warning(str(exc))
+    def add_global_options(self):
+        options_row=QtWidgets.QHBoxLayout();self.global_checkboxes={}
+        for option,label,tip in (
+                ('copy_animation','拷贝动画至控制器','统一应用到所有已载入部位；动画范围和采样间隔在各部位右键设置。'),
+                ('live_alignment','实时对齐','统一应用到已载入的左右手臂和腿部，拖动及播放时贴合骨骼。')):
+            checkbox=QtWidgets.QCheckBox(label,self);checkbox.setChecked(_global_options[option])
+            checkbox.setToolTip(tip)
+            checkbox.toggled.connect(lambda value,k=option:self.set_global_option(k,value))
+            self.global_checkboxes[option]=checkbox;options_row.addWidget(checkbox)
+        options_row.addStretch()
+        self.layout().insertLayout(self.layout().indexOf(self.diagram)+1,options_row)
+    def set_global_option(self,option,value):
+        _global_options[option]=bool(value)
+        for key,row in _state.items():
+            if option=='copy_animation' or PARTS[key]['kind'] in ('arm','leg'):row[option]=bool(value)
+        # Details can remain open while the main panel switch changes.
+        for window in self.details_windows.values():
+            self.sync_global_details(window)
+    def sync_global_details(self,window):
+        if not c.checkBox(window.copy_animation,exists=True):return
+        c.checkBox(window.copy_animation,e=True,value=_global_options['copy_animation'],visible=False,manage=False)
+        if hasattr(window,'live_alignment') and c.checkBox(window.live_alignment,exists=True):
+            c.checkBox(window.live_alignment,e=True,value=_global_options['live_alignment'],visible=False,manage=False)
+        window.toggle_animation()
+        if hasattr(window,'drive_targets'):
+            c.checkBox(window.drive_targets,e=True,changeCommand=lambda *_:self.sync_global_details(window))
     def load(self,key):
         names=c.ls(orderedSelection=True,long=True) or [];validate_count(key,names)
         _state[key]['targets']=names;_state[key]['uuids']=[c.ls(n,uuid=True)[0] for n in names]
@@ -227,7 +257,7 @@ class IntegratedWindow(QtWidgets.QDialog):
         if kind in ('shoulder','head'):c.floatFieldGrp(w.control_size,e=True,value1=opt.get('control_size',1.0))
         c.window(WINDOW,e=True,title=PARTS[key]['label']+' · 详细设置')
         c.textFieldGrp(w.namespace,e=True,label='部位名称',text=opt['name'])
-        c.checkBox(w.copy_animation,e=True,value=opt.get('copy_animation',True))
+        self.sync_global_details(w)
         c.floatFieldGrp(w.frame_bounds,e=True,value1=opt.get('start_frame',c.playbackOptions(q=True,minTime=True)),
                         value2=opt.get('end_frame',c.playbackOptions(q=True,maxTime=True)))
         c.floatFieldGrp(w.sample_step,e=True,value1=opt.get('sample_step',1));w.toggle_animation()
@@ -242,10 +272,11 @@ class IntegratedWindow(QtWidgets.QDialog):
             opt['targets']=list(w.targets);opt['uuids']=[c.ls(n,uuid=True)[0] for n in w.targets]
             opt.update(name=c.textFieldGrp(w.namespace,q=True,text=True).strip(),
                        drive_targets=True if kind=='body' else c.checkBox(w.drive_targets,q=True,value=True),
-                       copy_animation=c.checkBox(w.copy_animation,q=True,value=True),
+                       copy_animation=_global_options['copy_animation'],
                        start_frame=c.floatFieldGrp(w.frame_bounds,q=True,value1=True),end_frame=c.floatFieldGrp(w.frame_bounds,q=True,value2=True),
                        sample_step=c.floatFieldGrp(w.sample_step,q=True,value1=True))
             for option,field in fields.items():opt[option]=c.checkBox(field,q=True,value=True)
+            if kind in ('arm','leg'):opt['live_alignment']=_global_options['live_alignment']
             if kind in ('shoulder','head'):opt['control_size']=c.floatFieldGrp(w.control_size,q=True,value1=True)
             self.diagram.refresh();self.message(PARTS[key]['label']+'设置已保存。');c.deleteUI(WINDOW)
         c.button(w.create_button,e=True,label='保存部位设置（返回集成面板）',command=lambda *_:self.safe(save))
@@ -256,6 +287,9 @@ class IntegratedWindow(QtWidgets.QDialog):
     def create(self):
         from . import build
         config={k:dict(row,targets=targets(k)) for k,row in _state.items() if row['uuids']}
+        for key,row in config.items():
+            row['copy_animation']=_global_options['copy_animation']
+            if PARTS[key]['kind'] in ('arm','leg'):row['live_alignment']=_global_options['live_alignment']
         self.create_button.setEnabled(False)
         try:
             root=None
@@ -273,6 +307,8 @@ class IntegratedWindow(QtWidgets.QDialog):
 
 
 def show():
+    from maya_agent.rigs.live_edit import install
+    install()
     global _instance
     if _instance is not None:
         try:_instance.close();_instance.deleteLater()

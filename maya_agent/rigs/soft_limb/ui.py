@@ -22,6 +22,7 @@ class ArmRigWindow:
         self.drive_targets = c.checkBox(label='驱动所选骨骼 / 物体', value=True,changeCommand=self.toggle_animation)
         self.copy_animation = c.checkBox(label='拷贝动画至控制器',value=False,changeCommand=self.toggle_animation)
         self.animation_fields,self.frame_bounds,self.sample_step=layout.animation_fields(c)
+        self.live_alignment=c.checkBox(label='实时对齐（拖动 / 播放时贴合骨骼）',value=True)
         if extra_options:extra_options()
         self.create_button=layout.create_button(c,'按当前选择一键创建手臂系统',self.create)
         self.status=layout.status(c,'就绪。' if tracking else '已开启选择顺序追踪，请按肩、肘、腕重新逐个选择。')
@@ -62,7 +63,8 @@ class ArmRigWindow:
                 start_frame=c.floatFieldGrp(self.frame_bounds,q=True,value1=True),
                 end_frame=c.floatFieldGrp(self.frame_bounds,q=True,value2=True),
                 sample_step=c.floatFieldGrp(self.sample_step,q=True,value1=True),
-                side='R' if c.checkBox(self.right_side,q=True,value=True) else 'L')
+                side='R' if c.checkBox(self.right_side,q=True,value=True) else 'L',
+                live_alignment=c.checkBox(self.live_alignment,q=True,value=True))
             rig = self.last_result
             message = '已创建 {} {}手臂：{}\n上臂 {:.3f} cm / 前臂 {:.3f} cm。'.format(
                 rig['side'],'右侧' if rig['side']=='R' else '左侧',rig['namespace'],*rig['lengths'])
@@ -71,7 +73,7 @@ class ArmRigWindow:
                 report=rig['animation_transfer']
                 message+='\n动画已转移：{} 个采样帧；原曲线已备份。'.format(report['sample_count'])
             c.scrollField(self.status,edit=True,text=message)
-            c.select(rig['controls']['end_locator'], replace=True)
+            c.select(rig.get('live_controls',{}).get('end_fk',rig['controls']['end_locator']), replace=True)
             return rig
         except Exception as exc:
             c.scrollField(self.status,edit=True,text=str(exc))
@@ -80,6 +82,8 @@ class ArmRigWindow:
 
 
 def show():
+    from maya_agent.rigs.live_edit import install
+    install()
     global _instance
     _instance = ArmRigWindow()
     return _instance

@@ -9,10 +9,10 @@ DATA = Path(__file__).parent / 'data'
 
 
 def build_from_selection(targets=None, namespace='customArm', drive_targets=True, copy_animation=False,
-                         start_frame=None, end_frame=None, sample_step=1.0, side='L'):
+                         start_frame=None, end_frame=None, sample_step=1.0, side='L', live_alignment=False):
     from .selection import build_from_selection as create
     return create(targets=targets, namespace=namespace, drive_targets=drive_targets,copy_animation=copy_animation,
-                  start_frame=start_frame,end_frame=end_frame,sample_step=sample_step,side=side)
+                  start_frame=start_frame,end_frame=end_frame,sample_step=sample_step,side=side,live_alignment=live_alignment)
 
 
 def show_ui():

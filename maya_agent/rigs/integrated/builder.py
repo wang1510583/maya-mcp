@@ -264,6 +264,13 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
         result['external_follow']=dict(chest=chest_follow,hips=hips_follow)
         from .display import apply as organize_display
         result['display']=organize_display(result)
+        # Follow surfaces are installed after animation, hierarchy and spaces
+        # have finished writing the original input channels.
+        c.currentTime(frame)
+        from maya_agent.rigs.live_alignment import enable as enable_live_alignment
+        for key,part in built.items():
+            if PARTS[key]['kind'] in ('arm','leg') and data[key]['options'].get('live_alignment',False):
+                enable_live_alignment(part,PARTS[key]['kind'])
         c.addAttr(root,ln='integratedRigData',dt='string')
         c.setAttr(root+'.integratedRigData',json.dumps(result,ensure_ascii=False),type='string',lock=True)
         return result
