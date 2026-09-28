@@ -98,14 +98,13 @@ def _plan(root):
 
 def _snapshot(plugs):
     import maya.cmds as c
+    from .live_layers import blend_nodes,curves_for_plug
     values={p:c.getAttr(p) for p in plugs if not c.getAttr(p,lock=True)}
     curves={}
+    registered=blend_nodes();nodes=set()
     for p in values:
-        src=c.connectionInfo(p,sourceFromDestination=True)
-        if not src:continue
-        node=src.split('.')[0]
-        if not c.nodeType(node).startswith('animCurve'):
-            raise ValueError('实时操作不覆盖外部驱动：'+p)
+        nodes.update(curves_for_plug(p,registered))
+    for node in nodes:
         curves[node]=dict(times=c.keyframe(node,q=True,tc=True),values=c.keyframe(node,q=True,vc=True),
                           itt=c.keyTangent(node,q=True,itt=True),ott=c.keyTangent(node,q=True,ott=True))
         for flag in ('ia','oa','iw','ow','lock','weightLock'):
@@ -251,6 +250,9 @@ def before_drag(context):
     _gesture={'snapshots':[],'prepared':{},'auto':c.autoKeyframe(q=True,state=True),'rotation_layers':[], 'arm_gestures':[]}
     try:
         from . import live_arm_manual
+        from .live_layers import edit_layer
+        _gesture['anim_layer']=edit_layer(roots)
+        if _gesture['anim_layer']:c.autoKeyframe(state=False)
         _fence('before',_gesture['snapshots'])
         for root in roots:
             arm_roles=live_arm_manual.selected_roles(root)
@@ -274,7 +276,7 @@ def before_drag(context):
                 short=node.rsplit('|',1)[-1]+'.'+attr
                 if plug in _gesture['prepared'] or short in _gesture['prepared']:continue
                 incoming=c.connectionInfo(plug,sourceFromDestination=True)
-                if not incoming or c.nodeType(incoming.split('.')[0]).startswith('animCurve'):native_plugs.append(plug)
+                if not incoming or c.nodeType(incoming.split('.')[0]).startswith(('animCurve','animBlendNode')):native_plugs.append(plug)
         if native_plugs:
             snapshot=_snapshot(native_plugs);_gesture['snapshots'].append(snapshot)
             _gesture['prepared'].update(snapshot[0])
@@ -345,7 +347,10 @@ def after_drag(context):
                     for entry in _gesture['rotation_layers']:
                         finish(entry,entry['snapshot'],_gesture['auto'])
                 finally:c.autoKeyframe(state=auto)
-            if changed and _gesture['auto']:
+            if changed and _gesture.get('anim_layer'):
+                from .live_layers import commit
+                commit(_gesture['anim_layer'],_gesture['snapshots'],_gesture['auto'])
+            elif changed and _gesture['auto']:
                 # Include the companion channels rebased before the native drag.
                 # Otherwise Maya keys only the selected proxy and loses the
                 # calibrated pose when the animator returns to this frame.
