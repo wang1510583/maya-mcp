@@ -32,6 +32,8 @@ def preflight(parts):
         frames=frame_range(options.get('start_frame',c.playbackOptions(q=True,minTime=True)),
                            options.get('end_frame',c.playbackOptions(q=True,maxTime=True)),options.get('sample_step',1)) if copy else []
         data[key]=dict(options=options,samples=samples,frames=frames,motion={})
+        from maya_agent.rigs.controller_shapes import measure
+        data[key]['appearance_metrics']=measure(key,[s['node'] for s in samples])
         if part['kind']=='leg':
             from maya_agent.rigs.soft_leg.foot_placement import from_targets
             data[key]['pivot_placement']=from_targets(samples[2]['node'],samples[3]['node'])

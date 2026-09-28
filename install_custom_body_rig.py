@@ -19,6 +19,7 @@ def install():
             package.__path__.remove(location)
         package.__path__.insert(0, location)
     importlib.invalidate_caches()
+    importlib.reload(importlib.import_module('maya_agent.rigs.controller_shapes'))
     importlib.reload(importlib.import_module('maya_agent.rigs.ui_common'))
     import maya_agent.rigs.custom_body as body
     importlib.reload(body)

@@ -28,6 +28,8 @@ def build(namespace="customBody", on_conflict="increment", segment_count=4, heig
                                                allow_animation=copy_animation)
         segment_count = len(samples)
     data = load_definition(segment_count, height, preserve_four=not bool(samples))
+    from maya_agent.rigs import controller_shapes
+    appearance_metrics = controller_shapes.measure('body', [s['node'] for s in samples]) if samples else None
     if samples:
         from .fitting import fit_definition
         data = fit_definition(data, samples)
@@ -80,6 +82,8 @@ def build(namespace="customBody", on_conflict="increment", segment_count=4, heig
                   "controls": {role: namespace + ":" + name for role, name in data["controls"].items()},
                   "joints": [namespace + ":" + name for name in data["joints"]],
                   "display_layer_connections": ctx.layer_connections}
+        controller_shapes.apply(result, 'body', metrics=appearance_metrics, created=ctx.created)
+        result['node_count'] = len(result['nodes'])
     except Exception:
         if transfer:
             transfer.release_backup()

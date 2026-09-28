@@ -98,12 +98,17 @@ def set_pivot(node,position):
     """Change the pivot and locator appearance while retaining the entire transform matrix."""
     import maya.cmds as c
     import maya.api.OpenMaya as om
+    old_pivot=c.xform(node,q=True,os=True,rp=True)
     pivot_lock(node,False)
     try:
         c.xform(node,ws=True,pivots=position,preserve=True)
         local=om.MPoint(position)*om.MMatrix(c.xform(node,q=True,ws=True,m=True)).inverse()
         for shape in c.listRelatives(node,shapes=True,fullPath=True,type='locator') or []:
             c.setAttr(shape+'.localPosition',local.x,local.y,local.z)
+        delta=[local[i]-old_pivot[i] for i in range(3)]
+        for shape in c.listRelatives(node,shapes=True,fullPath=True,type='nurbsCurve') or []:
+            if c.objExists(shape+'.controllerArtwork') and c.getAttr(shape+'.controllerArtwork'):
+                c.move(*delta,shape+'.cv[*]',relative=True,objectSpace=True)
     finally:pivot_lock(node,True)
 
 
@@ -133,6 +138,9 @@ def set_mode(rig,enabled,cancel=False):
             snapshots={n:{a:c.getAttr(n+'.'+a)[0] for a in PIVOTS} for n in data['controls'].values()}
             shapes={s:c.getAttr(s+'.localPosition')[0] for n in data['controls'].values()
                     for s in c.listRelatives(n,shapes=True,fullPath=True,type='locator') or []}
+            artwork={s:c.xform(s+'.cv[*]',q=True,os=True,t=True) for n in data['controls'].values()
+                     for s in c.listRelatives(n,shapes=True,fullPath=True,type='nurbsCurve') or []
+                     if c.objExists(s+'.controllerArtwork')}
             from .pivot_animation import Edit
             # A previous compensated edit still needs graph-aware handling even
             # if an animator subsequently removes every live animation curve.
@@ -154,5 +162,7 @@ def set_mode(rig,enabled,cancel=False):
                             for a,value in attrs.items():c.setAttr(n+'.'+a,*value)
                         finally:pivot_lock(n,True)
                 for s,value in shapes.items():c.setAttr(s+'.localPosition',*value)
+                for s,values in artwork.items():
+                    for i in range(len(values)//3):c.xform(s+'.cv[{}]'.format(i),os=True,t=values[i*3:i*3+3])
                 raise
     return dict(root=root,enabled=enabled,guides=data['guides'])

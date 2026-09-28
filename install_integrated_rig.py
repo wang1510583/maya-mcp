@@ -10,11 +10,11 @@ def install():
     root=Path(__file__).resolve().parent
     if str(root) not in sys.path:sys.path.insert(0,str(root))
     importlib.invalidate_caches()
-    for module in ('maya_agent.rigs.custom_body.topology','maya_agent.rigs.custom_body.definition',
+    for module in ('maya_agent.rigs.controller_shapes','maya_agent.rigs.custom_body.topology','maya_agent.rigs.custom_body.definition',
                    'maya_agent.rigs.custom_body.builder','maya_agent.rigs.custom_body',
                    'maya_agent.rigs.custom_body.targets','maya_agent.rigs.custom_body.ui','maya_agent.rigs.soft_limb',
-                   'maya_agent.rigs.soft_limb.easy_rig','maya_agent.rigs.soft_limb.ui',
-                   'maya_agent.rigs.soft_leg','maya_agent.rigs.soft_leg.foot_placement','maya_agent.rigs.soft_leg.selection','maya_agent.rigs.soft_leg.ui',
+                   'maya_agent.rigs.soft_limb.easy_rig','maya_agent.rigs.soft_limb.selection','maya_agent.rigs.soft_limb.ui',
+                   'maya_agent.rigs.soft_leg','maya_agent.rigs.soft_leg.foot_placement','maya_agent.rigs.soft_leg.adjustment','maya_agent.rigs.soft_leg.selection','maya_agent.rigs.soft_leg.ui',
                    'maya_agent.rigs.integrated','maya_agent.rigs.head_neck','maya_agent.rigs.head_neck.ui',
                    'maya_agent.rigs.integrated.shoulder','maya_agent.rigs.integrated.spaces','maya_agent.rigs.integrated.attachments','maya_agent.rigs.integrated.hierarchy',
                    'maya_agent.rigs.integrated.shoulder_ui','maya_agent.rigs.integrated.display','maya_agent.rigs.integrated.builder','maya_agent.rigs.integrated.ui'):

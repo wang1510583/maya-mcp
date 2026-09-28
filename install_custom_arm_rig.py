@@ -10,6 +10,7 @@ def install():
     root = Path(__file__).resolve().parent
     if str(root) not in sys.path: sys.path.insert(0, str(root))
     importlib.invalidate_caches()
+    importlib.reload(importlib.import_module('maya_agent.rigs.controller_shapes'))
     importlib.reload(importlib.import_module('maya_agent.rigs.ui_common'))
     import maya_agent.rigs.soft_limb as arm
     importlib.reload(arm)

@@ -1,5 +1,5 @@
 """Selection-driven character assembly of the custom body, arm and leg modules."""
-VERSION='1.6.2'
+VERSION='1.7.0'
 PARTS={
     'head':dict(label='头脖子',kind='head',anchor='chest',count=None),
     'body':dict(label='身体',kind='body',anchor=None,count=None),

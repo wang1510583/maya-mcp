@@ -36,5 +36,8 @@ def build(item,targets,namespace,side):
             source=c.connectionInfo(plug,sourceFromDestination=True)
             if source:c.disconnectAttr(source,plug)
     constraint=c.parentConstraint(ctrl,targets[0],mo=False,name=namespace+':outputConstraint')[0]
-    return dict(namespace=namespace,root=root,controls={'clavicle':ctrl},side=side,
+    rig = dict(namespace=namespace,root=root,controls={'clavicle':ctrl},side=side,
                 nodes=[root,zero,ctrl,constraint],target_mapping=[dict(target=targets[0],control=ctrl)])
+    from maya_agent.rigs.controller_shapes import apply as apply_shapes
+    apply_shapes(rig, 'shoulder_'+side, targets=targets, metrics=item.get('appearance_metrics'), multiplier=size)
+    return rig

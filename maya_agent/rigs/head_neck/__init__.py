@@ -106,8 +106,11 @@ def build(item,targets,namespace,chest=None):
             if source:c.disconnectAttr(source,target+'.'+a)
         constraint=c.parentConstraint(driver,target,mo=False,name=namespace+':outputConstraint')[0]
         mappings.append(dict(target=target,control=ctrl,driver=driver,constraint=constraint))
-    return dict(namespace=namespace,root=root,version=VERSION,
+    rig = dict(namespace=namespace,root=root,version=VERSION,
                 controls=dict({'head':head},**{'neck'+str(i+1):n for i,n in enumerate(controls[:-1])}),
                 target_mapping=mappings,neck_groups=groups,neck_blends=blends,
                 head_position=position,chest_driver=chest,chest_orientation=chest_frame,
                 output_frames=drivers,head_anchor=head_anchor)
+    from maya_agent.rigs.controller_shapes import apply as apply_shapes
+    apply_shapes(rig, 'head', targets=targets, metrics=item.get('appearance_metrics'), multiplier=size)
+    return rig

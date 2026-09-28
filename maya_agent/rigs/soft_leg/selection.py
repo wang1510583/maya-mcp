@@ -114,6 +114,8 @@ def build_from_selection(targets=None,namespace='customLeg',drive_targets=True,c
             rig['drive_targets']=drive_targets
             rig['nodes']=c.ls(rig['namespace']+':*',long=True)
             sides.apply(rig,side,metadata_attr='legSide')
+            from maya_agent.rigs.controller_shapes import apply as apply_shapes
+            apply_shapes(rig, 'leg_'+side, metrics=dict(lengths=lengths, method='chain_lengths'))
             data=json.loads(c.getAttr(rig['root']+'.legSetupData'))
             data['controls']={k:rig['controls'][k] for k in data['controls']}
             c.setAttr(rig['root']+'.legSetupData',lock=False)

@@ -152,6 +152,8 @@ def build_from_selection(targets=None, namespace='customArm', drive_targets=True
         rig['animation_transfer']=transfer.bake(rig['target_mapping']) if transfer else None
         rig['drive_targets'] = drive_targets
         sides.apply(rig, side)
+        from maya_agent.rigs.controller_shapes import apply as apply_shapes
+        apply_shapes(rig, 'arm_'+side, metrics=dict(lengths=lengths, method='chain_lengths'))
         return rig
     except Exception:
         if transfer:transfer.release_backup()
