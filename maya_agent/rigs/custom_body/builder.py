@@ -9,7 +9,7 @@ COMPONENTS = (controls.build, skeleton.build, drivers.build, display.build)
 
 def build(namespace="customBody", on_conflict="increment", segment_count=4, height=6.0,
           use_selection=False, targets=None, copy_animation=False,
-          start_frame=None, end_frame=None, sample_step=1.0):
+          start_frame=None, end_frame=None, sample_step=1.0, body_drive=True):
     validate_options(namespace, on_conflict)
     import maya.cmds as c
     import threading
@@ -83,6 +83,10 @@ def build(namespace="customBody", on_conflict="increment", segment_count=4, heig
                   "joints": [namespace + ":" + name for name in data["joints"]],
                   "display_layer_connections": ctx.layer_connections}
         controller_shapes.apply(result, 'body', metrics=appearance_metrics, created=ctx.created)
+        if body_drive:
+            from maya_agent.rigs.body_direction import enable
+            direction=enable(result)
+            ctx.created.extend(direction['created'])
         result['node_count'] = len(result['nodes'])
     except Exception:
         if transfer:

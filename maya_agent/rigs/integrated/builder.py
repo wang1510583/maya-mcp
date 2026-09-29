@@ -123,6 +123,7 @@ def create_part(key,item,targets,namespace,chest=None):
     if item['frames']:kwargs.update(start_frame=item['frames'][0],end_frame=item['frames'][-1],sample_step=opt.get('sample_step',1))
     if part['kind']=='body':
         from maya_agent.rigs.custom_body import build
+        kwargs['body_drive']=False
     elif part['kind']=='arm':
         from maya_agent.rigs.soft_limb import build_from_selection as build
         kwargs['side']=part['side']
@@ -290,6 +291,9 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
             if role:
                 space=next((s for s in spaces if s['control']==part['controls'][role]),None)
                 if space:enable_head_knee_space(part,space,role)
+        if 'body' in built:
+            from maya_agent.rigs.body_direction import enable as enable_body_direction
+            enable_body_direction(built['body'])
         c.addAttr(root,ln='integratedRigData',dt='string')
         c.setAttr(root+'.integratedRigData',json.dumps(result,ensure_ascii=False),type='string',lock=True)
         return result

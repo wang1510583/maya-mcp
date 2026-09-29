@@ -17,6 +17,9 @@ if '_pending' not in globals():_pending={}
 
 def _switch_module(root):
     import maya.cmds as c
+    if c.objExists(root+'.bodyDriveData'):
+        from . import body_direction
+        return body_direction
     if c.objExists(root+'.matchedSpaceData'):
         from . import head_knee_space
         return head_knee_space
@@ -32,7 +35,7 @@ def _switch_module(root):
 
 def _has_mode(root):
     import maya.cmds as c
-    return any(c.objExists(root+'.'+a) for a in ('armWorldIKData','footSpaceData','upperArmSpaceData','matchedSpaceData'))
+    return any(c.objExists(root+'.'+a) for a in ('armWorldIKData','footSpaceData','upperArmSpaceData','matchedSpaceData','bodyDriveData'))
 
 
 def _sync_mode_cache():
@@ -374,7 +377,7 @@ def install():
             try:om.MMessage.removeCallback(entry['id'])
             except RuntimeError:pass
             _callbacks.pop(root,None)
-    roots=(c.ls('*:rig_root',type='transform') or [])+(c.ls('*.upperArmSpaceData','*:*.upperArmSpaceData','*.matchedSpaceData','*:*.matchedSpaceData',objectsOnly=True) or [])
+    roots=(c.ls('*:rig_root',type='transform') or [])+(c.ls('*.upperArmSpaceData','*:*.upperArmSpaceData','*.matchedSpaceData','*:*.matchedSpaceData','*.bodyDriveData','*:*.bodyDriveData',objectsOnly=True) or [])
     for root in dict.fromkeys(roots):
         if not _has_mode(root) or root in _callbacks:continue
         data=_switch_module(root)._data(root);node,attr=data['global_plug'].rsplit('.',1)

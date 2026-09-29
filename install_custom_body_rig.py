@@ -20,6 +20,8 @@ def install():
         package.__path__.insert(0, location)
     importlib.invalidate_caches()
     importlib.reload(importlib.import_module('maya_agent.rigs.controller_shapes'))
+    for name in ('live_layers','live_edit','wrist_key_colors','body_direction_match','body_direction','arm_ik'):
+        importlib.reload(importlib.import_module('maya_agent.rigs.'+name))
     importlib.reload(importlib.import_module('maya_agent.rigs.ui_common'))
     import maya_agent.rigs.custom_body as body
     importlib.reload(body)

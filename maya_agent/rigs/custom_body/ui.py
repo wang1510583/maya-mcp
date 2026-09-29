@@ -152,6 +152,8 @@ class BodyRigWindow:
 
 
 def show():
+    from maya_agent.rigs.arm_ik import install
+    install()
     global _instance
     _instance = BodyRigWindow()
     return _instance

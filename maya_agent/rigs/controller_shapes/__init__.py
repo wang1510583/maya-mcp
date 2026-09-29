@@ -117,7 +117,7 @@ def _role(role, roles, current_roles):
         if role.startswith(prefix):
             source = sorted(r for r in roles if r.startswith(prefix))
             target = sorted((r for r in current_roles if r.startswith(prefix)),
-                            key=lambda r: int(r[len(prefix):]))
+                            key=lambda r: {'_lower':1,'_upper':2}.get(r[len(prefix):],int(r[len(prefix):]) if r[len(prefix):].isdigit() else 0))
             if source:
                 index = target.index(role)
                 return source[round(index*(len(source)-1)/max(len(target)-1, 1))]

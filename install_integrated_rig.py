@@ -10,7 +10,7 @@ def install():
     root=Path(__file__).resolve().parent
     if str(root) not in sys.path:sys.path.insert(0,str(root))
     importlib.invalidate_caches()
-    for module in ('maya_agent.rigs.controller_shapes','maya_agent.rigs.wrist_key_colors','maya_agent.rigs.live_layers','maya_agent.rigs.live_rotation','maya_agent.rigs.live_arm_fk','maya_agent.rigs.live_arm_manual','maya_agent.rigs.live_edit','maya_agent.rigs.live_alignment','maya_agent.rigs.foot_space','maya_agent.rigs.head_knee_space','maya_agent.rigs.arm_ik','maya_agent.rigs.arm_ik_shared','maya_agent.rigs.upper_arm_space','maya_agent.rigs.custom_body.topology','maya_agent.rigs.custom_body.definition',
+    for module in ('maya_agent.rigs.controller_shapes','maya_agent.rigs.wrist_key_colors','maya_agent.rigs.live_layers','maya_agent.rigs.live_rotation','maya_agent.rigs.live_arm_fk','maya_agent.rigs.live_arm_manual','maya_agent.rigs.live_edit','maya_agent.rigs.live_alignment','maya_agent.rigs.foot_space','maya_agent.rigs.head_knee_space','maya_agent.rigs.arm_ik','maya_agent.rigs.arm_ik_shared','maya_agent.rigs.upper_arm_space','maya_agent.rigs.body_direction_match','maya_agent.rigs.body_direction','maya_agent.rigs.custom_body.topology','maya_agent.rigs.custom_body.definition',
                    'maya_agent.rigs.custom_body.builder','maya_agent.rigs.custom_body',
                    'maya_agent.rigs.custom_body.targets','maya_agent.rigs.custom_body.ui','maya_agent.rigs.soft_limb',
                    'maya_agent.rigs.soft_limb.easy_rig','maya_agent.rigs.soft_limb.selection','maya_agent.rigs.soft_limb.ui',

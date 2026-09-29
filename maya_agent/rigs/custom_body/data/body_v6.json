@@ -1,6 +1,8 @@
 {
   "schema_version": 6,
-  "version": "1.3.2",
+  "version": "1.4.1",
+  "body_drive": "matched_hips_or_chest_direction",
+  "body_drive_matching": "mode_isolated_stepped_parent_offsets_on_original_controls",
   "base_template": "body_v1.json",
   "min_segments": 2,
   "max_segments": 64,
