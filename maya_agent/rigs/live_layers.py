@@ -37,7 +37,11 @@ def edit_layer(roots=()):
     layers=c.ls(type='animLayer') or []
     if len(layers)<2:return None
     if roots:
-        plugs=[e['proxy'] for root in roots for e in json.loads(c.getAttr(root+'.liveAlignmentData'))['entries']]
+        plugs=[e['proxy'] for root in roots if c.objExists(root+'.liveAlignmentData') for e in json.loads(c.getAttr(root+'.liveAlignmentData'))['entries']]
+        from . import arm_ik_shared,arm_ik
+        for root in roots:
+            if arm_ik_shared.active(root):
+                plugs.extend(arm_ik._data(root)['controls']['wrist']+'.'+a for a in arm_ik.TR)
         plugs.extend(n+'.'+a for n in c.ls(sl=True,long=True,objectsOnly=True) or []
                      for a in ('translateX','translateY','translateZ','rotateX','rotateY','rotateZ') if c.objExists(n+'.'+a))
         registered=blend_nodes()
@@ -59,7 +63,7 @@ def edit_layer(roots=()):
     return layer
 
 
-def commit(layer,snapshots,auto):
+def commit(layer,snapshots,auto,force_plugs=()):
     """Key final composite values through Maya's native layer value resolver.
 
     Calibration companions join the same layer only if they actually changed.
@@ -69,6 +73,7 @@ def commit(layer,snapshots,auto):
     before={p:v for values,curves in snapshots for p,v in values.items()}
     final={p:c.getAttr(p) for p in before}
     changed=[p for p in final if abs(final[p]-before[p])>1e-8]
+    changed=list(dict.fromkeys(changed+[p for p in force_plugs if p in final]))
     if not changed:return
     root=c.animLayer(q=True,root=True)
     if layer!=root:

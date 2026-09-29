@@ -168,6 +168,8 @@ class LegRigWindow:
 def show():
     from maya_agent.rigs.live_edit import install
     install()
+    from maya_agent.rigs.arm_ik import install as install_spaces
+    install_spaces()
     global _instance
     _instance=LegRigWindow()
     return _instance

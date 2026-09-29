@@ -126,6 +126,7 @@ def create_part(key,item,targets,namespace,chest=None):
     elif part['kind']=='arm':
         from maya_agent.rigs.soft_limb import build_from_selection as build
         kwargs['side']=part['side']
+        kwargs['world_ik']=False  # Install after hierarchy, spaces and live surfaces.
     else:
         from maya_agent.rigs.soft_leg import build_from_selection as build
         kwargs['side']=part['side']
@@ -271,6 +272,15 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
         for key,part in built.items():
             if PARTS[key]['kind'] in ('arm','leg') and data[key]['options'].get('live_alignment',False):
                 enable_live_alignment(part,PARTS[key]['kind'])
+        from maya_agent.rigs.arm_ik import enable as enable_world_ik
+        for key,part in built.items():
+            if PARTS[key]['kind']=='arm' and data[key]['options'].get('space_wrist',False):
+                enable_world_ik(part)
+        from maya_agent.rigs.foot_space import enable as enable_foot_space
+        for key,part in built.items():
+            if PARTS[key]['kind']=='leg' and data[key]['options'].get('space_foot',False):
+                space=next(s for s in spaces if s['control']==part['controls']['foot'])
+                enable_foot_space(part,space)
         c.addAttr(root,ln='integratedRigData',dt='string')
         c.setAttr(root+'.integratedRigData',json.dumps(result,ensure_ascii=False),type='string',lock=True)
         return result

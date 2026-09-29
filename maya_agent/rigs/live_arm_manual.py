@@ -26,6 +26,10 @@ def _record_fallback(error,phase):
 
 def selected_roles(root):
     import maya.cmds as c
+    if not c.objExists(root+'.liveAlignmentData'):
+        from . import arm_ik,arm_ik_shared
+        d=arm_ik._data(root)
+        return ['end_fk'] if arm_ik_shared.active(root) and set(c.ls(sl=True,long=True) or []).intersection(c.ls(d['fk_wrist'],long=True)) else []
     data=json.loads(c.getAttr(root+'.liveAlignmentData'))
     if data['kind']!='arm':return []
     selected=set(c.ls(sl=True,long=True,objectsOnly=True) or [])
@@ -59,6 +63,8 @@ def begin(root,role,_setup=None):
     import maya.cmds as c
     import maya.api.OpenMaya as om
     from .live_edit import prepare, _restore, _frame, PosePreservationError, TR
+    from . import arm_ik_shared
+    if arm_ik_shared.active(root,role):return arm_ik_shared.begin(root,_setup)
     data=json.loads(c.getAttr(root+'.liveAlignmentData'))
     if any(c.objExists(n+'.liveRotationData') for n in data['inputs'].values()):
         raise ValueError('此手臂还包含旧版隐藏旋转参考，请先迁移旧动画。')
@@ -178,13 +184,17 @@ def update(entry,force=False,_restore_display=True):
     local=om.MTransformationMatrix(entry['local'])
     local.setTranslation(om.MVector(*native[:3]),om.MSpace.kTransform)
     local.setRotation(om.MEulerRotation(*[math.radians(v) for v in native[3:]],c.getAttr(proxy+'.rotateOrder')))
-    try:_world(entry['source'],entry['input_basis']*local.asMatrix()*entry['parent'],entry['destinations'])
+    desired=entry['input_basis']*local.asMatrix()*entry['parent']
+    try:_world(entry['source'],desired,entry['destinations'])
     finally:
         if _restore_display:restore_display(entry)
 
 
 def _reconnect(entry,values):
     import maya.cmds as c
+    if entry.get('shared_ik'):
+        from .arm_ik_shared import reconnect
+        reconnect(entry);return
     for src,dst in entry['edges']:
         c.setAttr(src,values[src]);c.connectAttr(src,dst,force=True)
     for incoming,plug in entry['curve_edges']:
@@ -210,6 +220,7 @@ def finish(entry,cancel=False):
     for plug,value in values.items():c.setAttr(plug,value)
     entry['finished']=True
     if cancel or not entry['changed']:_restore(entry['snapshot'])
+    elif any(child.get('shared_ik') for child in children):return
     else:
         # Store the same canonical pose that the next gesture will start from.
         # Otherwise a moved elbow is keyed as an offset at frame A, then the

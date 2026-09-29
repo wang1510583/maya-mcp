@@ -75,6 +75,8 @@ def activate():
     start()
     from maya_agent.rigs.live_edit import install as install_live_edit
     install_live_edit()
+    from maya_agent.rigs.arm_ik import install as install_arm_ik
+    install_arm_ik()
     shelf = "MayaMCP"
     if not cmds.shelfLayout(shelf, exists=True):
         top = mel.eval("$tmp=$gShelfTopLevel")

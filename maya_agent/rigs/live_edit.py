@@ -229,6 +229,11 @@ def _roots():
     import maya.cmds as c
     roots=[]
     for selected in c.ls(sl=True,long=True,objectsOnly=True) or []:
+        if c.objExists(selected+'.armSharedWrist'):
+            from .arm_ik_shared import active
+            linked=c.listConnections(selected+'.armSharedWrist',s=True,d=False) or []
+            if linked and active(linked[0]):
+                roots.append(linked[0]);continue
         if not c.objExists(selected+'.liveInput'):continue
         node=selected
         while node:

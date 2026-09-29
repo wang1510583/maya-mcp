@@ -205,7 +205,7 @@ def enable(rig, kind):
             if incoming and not c.nodeType(incoming.split('.')[0]).startswith('animCurve'):
                 raise ValueError('实时对齐不覆盖控制器外部驱动：'+plug)
     before={n:c.xform(n,q=True,ws=True,m=True) for n in rig.get('joints',[])}
-    created=[];entries=[];surfaces={};hidden={};joint_styles={}
+    created=[];entries=[];surfaces={};hidden={};hidden_connections={};joint_styles={}
     frame=c.currentTime(q=True);selection=c.ls(sl=True,long=True) or [];auto=c.autoKeyframe(q=True,state=True)
     def create(kind,label,**kwargs):
         n=c.createNode(kind,name=ns+':live_'+label,skipSelect=True,**kwargs);created.append(n);return n
@@ -268,6 +268,9 @@ def enable(rig, kind):
             _artwork(source,proxy,create)
             for shape in c.listRelatives(source,s=True,f=True) or []:
                 if c.nodeType(shape) not in ('nurbsCurve','locator'):continue
+                incoming=c.connectionInfo(shape+'.lodVisibility',sfd=True)
+                if incoming and c.objExists(root+'.armWorldIKData') and incoming==ns+':worldIK_visibility.outputX':
+                    hidden_connections[shape]=incoming;c.disconnectAttr(incoming,shape+'.lodVisibility')
                 hidden[shape]=c.getAttr(shape+'.lodVisibility');c.setAttr(shape+'.lodVisibility',False)
             if c.nodeType(source)=='joint':
                 joint_styles[source]=c.getAttr(source+'.drawStyle');c.setAttr(source+'.drawStyle',2)
@@ -275,7 +278,7 @@ def enable(rig, kind):
         if error>1e-5:raise RuntimeError('实时对齐改变了原姿态：'+str(error))
         data=dict(version=VERSION,kind=kind,root=root,controls=surfaces,inputs={k:rig['controls'][k] for k in roles},
                   targets=roles,position_targets={'foot':rig['joints'][2]} if kind=='leg' else {},
-                  created=created,entries=entries,hidden_shapes=hidden,joint_styles=joint_styles)
+                  created=created,entries=entries,hidden_shapes=hidden,hidden_connections=hidden_connections,joint_styles=joint_styles)
         _add_roll_controls(rig,data)
         c.addAttr(root,ln='liveAlignmentData',dt='string')
         c.setAttr(root+'.liveAlignmentData',json.dumps(data),type='string',lock=True)
@@ -284,6 +287,9 @@ def enable(rig, kind):
         rig.setdefault('nodes',[]).extend(created)
         from . import live_edit
         live_edit.install()
+        if kind=='arm':
+            from .arm_ik import refresh_surfaces
+            refresh_surfaces(root,surfaces)
         return data
     except Exception:
         for e in reversed(entries):
@@ -293,6 +299,7 @@ def enable(rig, kind):
                 c.connectAttr(e['incoming'],e['source'],force=True)
             else:c.setAttr(e['source'],e['value'])
         for s,v in hidden.items():c.setAttr(s+'.lodVisibility',v)
+        for s,p in hidden_connections.items():c.connectAttr(p,s+'.lodVisibility',force=True)
         for n,v in joint_styles.items():c.setAttr(n+'.drawStyle',v)
         for n in reversed(created):
             if c.objExists(n):c.delete(n)
@@ -325,11 +332,16 @@ def remove(root):
             else:c.setAttr(e['source'],value)
         for s,v in data['hidden_shapes'].items():
             if c.objExists(s):c.setAttr(s+'.lodVisibility',v)
+        for s,p in data.get('hidden_connections',{}).items():
+            if c.objExists(s):c.connectAttr(p,s+'.lodVisibility',force=True)
         for n,v in data['joint_styles'].items():c.setAttr(n+'.drawStyle',v)
         for n in reversed(data['created']):
             if c.objExists(n):c.delete(n)
         c.setAttr(root+'.liveAlignmentData',lock=False);c.deleteAttr(root+'.liveAlignmentData')
         c.deleteAttr(root+'.liveAlignment')
+        if data['kind']=='arm':
+            from .arm_ik import refresh_surfaces
+            refresh_surfaces(root,data['inputs'])
     finally:
         c.autoKeyframe(state=auto);c.undoInfo(closeChunk=True)
 

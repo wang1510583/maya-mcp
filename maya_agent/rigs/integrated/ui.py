@@ -309,6 +309,8 @@ class IntegratedWindow(QtWidgets.QDialog):
 def show():
     from maya_agent.rigs.live_edit import install
     install()
+    from maya_agent.rigs.arm_ik import install as install_arm_ik
+    install_arm_ik()
     global _instance
     if _instance is not None:
         try:_instance.close();_instance.deleteLater()

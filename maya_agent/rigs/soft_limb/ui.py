@@ -84,6 +84,8 @@ class ArmRigWindow:
 def show():
     from maya_agent.rigs.live_edit import install
     install()
+    from maya_agent.rigs.arm_ik import install as install_arm_ik
+    install_arm_ik()
     global _instance
     _instance = ArmRigWindow()
     return _instance

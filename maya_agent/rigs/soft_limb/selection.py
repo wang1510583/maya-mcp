@@ -115,7 +115,7 @@ def connect(rig, samples, drivers=None):
 
 
 def build_from_selection(targets=None, namespace='customArm', drive_targets=True, copy_animation=False,
-                         start_frame=None, end_frame=None, sample_step=1.0, side='L', live_alignment=False):
+                         start_frame=None, end_frame=None, sample_step=1.0, side='L', live_alignment=False, world_ik=True):
     import maya.cmds as c
     from . import build
     from maya_agent.rigs.custom_body.targets import restore
@@ -158,6 +158,9 @@ def build_from_selection(targets=None, namespace='customArm', drive_targets=True
             if transfer:c.currentTime(transfer.time)
             from maya_agent.rigs.live_alignment import enable
             enable(rig,'arm')
+        if world_ik:
+            from maya_agent.rigs.arm_ik import enable as enable_world_ik
+            enable_world_ik(rig)
         return rig
     except Exception:
         if transfer:transfer.release_backup()
