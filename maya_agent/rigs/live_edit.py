@@ -176,6 +176,16 @@ overrides. Never call on load, selection, time change or metadata upgrade.
             c.disconnectAttr(source,plug);c.setAttr(plug,snapshot[0][plug])
         endpoint=(data['targets']['foot'],frames[0][1]) if data['kind']=='leg' else None
         _apply_plan(destinations,frames,zero,restore,endpoint)
+        if data['kind']=='arm':
+            # Recalibration is an optional re-encoding, not an animator edit of
+            # the elbow pole. Keep its authored Z (zero by default, or explicit
+            # user animation) while matching the FK inputs. If this constrained
+            # calibration cannot preserve the solve, the normal fallback keeps
+            # the completed gesture in its original channels instead.
+            from .zero_channels import resolve
+            pole=ns+':elb_'+('R' if '_R' in data['inputs']['shoulder_fk'].rsplit(':',1)[-1] else 'L')+'1'
+            pole_z=resolve(pole+'.translateZ')
+            if pole_z in snapshot[0]:_set(pole_z,snapshot[0][pole_z])
         edited={p:c.getAttr(p) for p in edges}
         for plug,source in edges.items():c.connectAttr(source,plug)
         for plug,value in edited.items():_set(plug,value)
@@ -292,6 +302,14 @@ def before_drag(context):
             entry=zero_channels.begin(control);snapshot=entry['snapshot']
             _gesture['arm_gestures'].append(entry);_gesture['snapshots'].append(snapshot)
             _gesture['prepared'].update(snapshot[0])
+        # Wrist-only and world-IK gestures do not normally snapshot the FK pole.
+        # Include it before keying so an unchanged-value key has native undo and
+        # layer support without borrowing another arm's channels.
+        held=_pole_hold_key_plugs(_gesture['arm_gestures'])
+        missing=[p for p in held if p not in _gesture['prepared']]
+        if missing:
+            snapshot=_snapshot(missing);_gesture['snapshots'].append(snapshot)
+            _gesture['prepared'].update(snapshot[0])
         # Auto Key is suspended during live input isolation. Include ordinary
         # co-selected controls so mixed selections retain Maya's key behavior.
         native_plugs=[]
@@ -353,6 +371,23 @@ def _isolated_arm_rotation(root):
     return None
 
 
+def _pole_hold_key_plugs(entries,changed_only=False):
+    import maya.cmds as c
+    from .zero_channels import resolve
+    plugs=set()
+    for entry in entries:
+        for child in entry.get('children',[entry]):
+            if child.get('role') not in ('shoulder_fk','middle_fk','end_fk'):continue
+            if changed_only and not child.get('changed'):continue
+            root=child['data']['root'];pole=None
+            if c.objExists(root+'.zeroPartData'):
+                pole=json.loads(c.getAttr(root+'.zeroPartData'))['sources'].get('pole_locator')
+            if pole:
+                plug=resolve(pole+'.translateZ')
+                if not c.getAttr(plug,lock=True):plugs.add(plug)
+    return sorted(plugs)
+
+
 def after_drag(context):
     import maya.cmds as c
     global _gesture
@@ -373,9 +408,10 @@ def after_drag(context):
                     for entry in _gesture['rotation_layers']:
                         finish(entry,entry['snapshot'],_gesture['auto'])
                 finally:c.autoKeyframe(state=auto)
+            force_poles=_pole_hold_key_plugs(_gesture.get('arm_gestures',[]),changed_only=True) if changed and _gesture['auto'] else []
             if changed and _gesture.get('anim_layer'):
                 from .live_layers import commit
-                commit(_gesture['anim_layer'],_gesture['snapshots'],_gesture['auto'])
+                commit(_gesture['anim_layer'],_gesture['snapshots'],_gesture['auto'],force_plugs=force_poles)
             elif changed and _gesture['auto']:
                 # Include the companion channels rebased before the native drag.
                 # Otherwise Maya keys only the selected proxy and loses the
@@ -395,6 +431,17 @@ def after_drag(context):
                         if incoming and curves and c.nodeType(incoming.split('.')[0]).startswith('animCurve'):
                             c.setKeyframe(plug,time=c.currentTime(q=True),value=value)
                 for plug,value in committed.items():c.setAttr(plug,value)
+                for plug in force_poles:
+                    value=c.getAttr(plug)
+                    # Inserting a key into an existing curve preserves its
+                    # interpolation; a previously static channel needs a first key.
+                    incoming=c.connectionInfo(plug,sfd=True)
+                    existing=c.keyframe(plug,q=True,time=(c.currentTime(q=True),)*2,tc=True) or []
+                    curve=c.nodeType(incoming.split('.')[0]).startswith('animCurve') if incoming else False
+                    sample=c.keyframe(incoming.split('.')[0],q=True,eval=True,time=(c.currentTime(q=True),)*2) if curve else []
+                    if curve and not existing and sample and abs(sample[0]-value)<1e-9:c.setKeyframe(plug,insert=True)
+                    else:c.setKeyframe(plug,time=c.currentTime(q=True),value=value)
+                    c.setAttr(plug,value)
             _fence('after',[_snapshot(values) for values,curves in _gesture['snapshots']])
     except Exception:
         # One failed arm must not leave the other selected arms disconnected.
