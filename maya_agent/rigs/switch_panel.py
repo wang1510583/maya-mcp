@@ -6,7 +6,7 @@ is only a transient mouse gesture, never an animation or rig driver.
 import json
 import math
 
-VERSION='1.2.0'
+VERSION='1.3.0'
 if '_callbacks' not in globals():_callbacks={}
 if '_pending' not in globals():_pending={}
 if '_busy' not in globals():_busy=False
@@ -25,7 +25,7 @@ def targets(rig):
     for key,part in parts.items():
         controls=part.get('controls',{})
         candidates=[]
-        if key=='body':candidates=[('hips',controls.get('hips'))]
+        if key=='body':candidates=[('hips',controls.get('hips')),('chest',controls.get('chest'))]
         elif key=='head':candidates=[('head',controls.get('head'))]
         elif key.startswith('arm_'):
             side=key[-1];candidates=[('wrist_'+side,part['root']),('upper_'+side,controls.get('shoulder_fk'))]
@@ -87,6 +87,9 @@ def build(character):
         height=max(hi[1]-lo[1],20);unit=height*.04
         c.xform(root,ws=True,t=(hi[0]+height*.09,lo[1]+height*.30,(lo[2]+hi[2])*.5))
         c.setAttr(root+'.scale',unit,unit,unit)
+        # The newly created panel master also starts with neutral TR channels.
+        rest=[1.,0.,0.,0.,0.,1.,0.,0.,0.,0.,1.,0.]+list(c.getAttr(root+'.translate')[0])+[1.]
+        c.setAttr(root+'.offsetParentMatrix',*rest,type='matrix');c.setAttr(root+'.translate',0,0,0)
         label('R',4.0,13.4,.9);label('L',8.6,13.4,.9)
         sliders={};missing=[]
         rows=[('手','wrist',12),('大臂','upper',9.8),('脚','foot',7.6),('膝盖','knee',5.4),('腰','hips',3.2),('头','head',1)]
@@ -165,12 +168,59 @@ def upgrade(root):
             _paint(root,(1,.72,.18),False)
             c.xform(root,os=True,pivots=(6.2,15.8,0),preserve=True)
             data['master_control']=root;data['nodes'].append(shape)
+        if not data.get('chest_row'):_add_chest_row(root,data)
         for handle in data['sliders'].values():_key_proxies(handle)
         data['version']=VERSION
         c.setAttr(root+'.spacePanelData',lock=False);c.setAttr(root+'.spacePanelData',json.dumps(data),type='string',lock=True)
+        install()
         return data
     finally:
         c.autoKeyframe(state=auto);c.select(selection,r=True) if selection else c.select(cl=True);c.undoInfo(closeChunk=True)
+
+
+def _add_chest_row(root,data):
+    """Insert below hips, preserving existing handles, their keys and the master."""
+    import maya.cmds as c
+    try:from PySide2 import QtGui
+    except ImportError:from PySide6 import QtGui
+    ns=root.rsplit(':',1)[0];nodes=data['nodes']
+    for name in ('switchBase_head','switchTrack_head'):
+        n=ns+':'+name
+        if c.objExists(n):
+            locked=c.getAttr(n+'.ty',lock=True);c.setAttr(n+'.ty',lock=False)
+            c.setAttr(n+'.ty',c.getAttr(n+'.ty')-2.2);c.setAttr(n+'.ty',lock=locked)
+    for n in list(nodes):
+        if not c.objExists(n) or 'switchLabel_' not in n:continue
+        points=c.xform(n+'.cv[*]',q=True,os=True,t=True)
+        if points and max(points[::3])<2.5 and min(points[1::3])>=.59 and max(points[1::3])<1.6:
+            c.setAttr(n+'.ty',lock=False);c.setAttr(n+'.ty',c.getAttr(n+'.ty')-2.2);c.setAttr(n+'.ty',lock=True)
+    def curve(name,points,parent,reference=True,color=(.92,.92,.92)):
+        n=c.curve(name=ns+':'+name,d=1,p=points);nodes.append(n)
+        c.parent(n,parent,relative=True);_paint(n,color,reference);return n
+    font=QtGui.QFont('Microsoft YaHei');font.setPixelSize(100);font.setBold(True)
+    path=QtGui.QPainterPath();path.addText(0,0,font,'胸');bounds=path.boundingRect();scale=.85/bounds.height()
+    for i,poly in enumerate(path.toSubpathPolygons()):
+        points=[((p.x()-bounds.left())*scale,.6+(bounds.bottom()-p.y())*scale,0) for p in poly]
+        if len(points)>1:curve('switchLabel_chest_'+str(i),points,root)
+    source=targets(_read(data['character'],'integratedRigData')).get('chest')
+    curve('switchTrack_chest',[(4.1,.35,0),(8.8,.35,0),(8.8,1.65,0),(4.1,1.65,0),(4.1,.35,0)],root,
+          color=(.92,.92,.92) if source else (.32,.32,.32))
+    if source:
+        base=c.createNode('transform',name=ns+':switchBase_chest',parent=root);nodes.append(base);c.setAttr(base+'.translate',4.65,1,0)
+        display=c.createNode('transform',name=ns+':switchDisplay_chest',parent=base);nodes.append(display)
+        knob=curve('switch_chest',[(.39*math.cos(a*math.pi/16),.39*math.sin(a*math.pi/16),.02) for a in range(33)],display,False)
+        for a in ('ty','tz','rx','ry','rz','sx','sy','sz','v'):c.setAttr(knob+'.'+a,lock=True,keyable=False,channelBox=False)
+        c.setAttr(knob+'.tx',keyable=False);c.transformLimits(knob,tx=(-3.6,3.6),etx=(True,True))
+        mul=c.createNode('multDoubleLinear',name=ns+':switchPosition_chest');nodes.append(mul)
+        c.connectAttr(source['plug'],mul+'.input1');c.setAttr(mul+'.input2',3.6);c.connectAttr(mul+'.output',display+'.tx')
+        nodes.extend(_limits(knob,display,3.6))
+        c.addAttr(knob,ln='global',proxy=source['plug'],keyable=True)
+        c.addAttr(knob,ln='switchOwner',at='message');c.connectAttr(source['owner']+'.message',knob+'.switchOwner')
+        entry=dict(role='chest',travel=3.6,display=display,owner=source['owner'],plug=source['plug'])
+        c.addAttr(knob,ln='spaceSliderData',dt='string');c.setAttr(knob+'.spaceSliderData',json.dumps(entry),type='string',lock=True)
+        data['sliders']['chest']=knob
+    elif 'chest' not in data['missing']:data['missing'].append('chest')
+    data['chest_row']=True
 
 
 def _key_proxies(handle):
@@ -185,6 +235,8 @@ def _key_proxies(handle):
     data=_read(handle,'spaceSliderData');owner=(c.listConnections(handle+'.switchOwner',s=True,d=False) or [data['owner']])[0]
     mode=arm_ik._switch_module(owner)._data(owner)
     control=mode.get('control') or mode.get('fk_wrist') or mode['controls'][0]
+    from .zero_channels import surface
+    control=surface(control)
     attrs=c.listAttr(control,keyable=True,unlocked=True,scalar=True) or []
     registered=live_layers.blend_nodes();proxies={}
     for attr in attrs:

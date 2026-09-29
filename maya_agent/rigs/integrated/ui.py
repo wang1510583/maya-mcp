@@ -309,7 +309,7 @@ class IntegratedWindow(QtWidgets.QDialog):
             chest=self.follow_target('chest') if 'body' not in config else None
             hips=self.follow_target('hips') if 'body' not in config else None
             self.last_result=build(config,namespace=self.namespace.text().strip(),general_root=root,
-                                   chest_follow=chest,hips_follow=hips)
+                                   chest_follow=chest,hips_follow=hips,zero_controls=True)
             from maya_agent.rigs.switch_panel import build as build_switch_panel,targets as panel_targets
             if panel_targets(self.last_result):build_switch_panel(self.last_result['root'])
             self.message('已创建 '+str(len(self.last_result['parts']))+' 个部位，已按参考结构连接控制器和部位起点。 Ctrl+Z 可整体撤销。')

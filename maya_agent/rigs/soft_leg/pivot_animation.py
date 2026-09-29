@@ -15,16 +15,23 @@ SCALARS=tuple(a+axis for a in ('rotate','rotateAxis','scale') for axis in 'XYZ')
 def source(plug):return c.connectionInfo(plug,sourceFromDestination=True) or ''
 
 
-def animation_source(plug):
-    """Resolve the tool's live channel relay; never duplicate its transform."""
+def animation_channel(plug):
+    """Resolve live and zero-based relays, retaining absolute input offsets."""
+    from maya_agent.rigs.zero_channels import resolve
+    direct=resolve(plug)
+    if direct!=plug:return direct
     src=source(plug)
-    if not src:return ''
+    if not src:return plug
     node=src.split('.')[0]
     if c.objExists(node+'.liveInput'):
         inputs=c.listConnections(node+'.liveInput',s=True,d=False) or []
         if inputs and c.ls(inputs[0],long=True)==c.ls(plug.split('.')[0],long=True):
-            return source(src)
-    return src
+            return resolve(src)
+    return plug
+
+
+def animation_source(plug):
+    return source(animation_channel(plug))
 
 
 def snapshot(node):
@@ -99,6 +106,9 @@ class Edit:
             clone=c.duplicate(curve,name=self.prefix+node.rsplit(':',1)[-1]+'_'+attr+'_pivotReference',
                               inputConnections=True)[0]
             self.created.append(clone)
+            channel=animation_channel(node+'.'+attr)
+            delta=c.getAttr(node+'.'+attr)-c.getAttr(channel)
+            if abs(delta)>1e-12:c.keyframe(clone,e=True,relative=True,valueChange=delta)
             for ref in (old,new):c.connectAttr(clone+'.'+src.split('.',1)[1],ref+'.'+attr)
         decomposers=[]
         for ref in (old,new):

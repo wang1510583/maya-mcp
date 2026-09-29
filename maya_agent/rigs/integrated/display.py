@@ -9,6 +9,9 @@ def collect(rig):
     hidden=set();axes=set();protected=set()
     auxiliary_roles={'parameters','settings','end_locator','roll'}
     for part in rig['parts'].values():
+        for role,node in part.get('zero_controls',{}).items():
+            if role in auxiliary_roles:hidden.update(c.ls(node,long=True) or [])
+            else:protected.update(c.ls(node,long=True) or [])
         for role,node in part['controls'].items():
             if role not in auxiliary_roles and isinstance(node,str):protected.update(c.ls(node,long=True) or [])
         ns=part['namespace']+':'

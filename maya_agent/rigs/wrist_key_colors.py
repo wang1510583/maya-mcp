@@ -29,12 +29,17 @@ def _curves(data):
     import maya.api.OpenMaya as om
     from . import live_layers
     registered=live_layers.blend_nodes();curves=set()
-    wrist=data['control']
+    from .zero_channels import surface
+    wrist=surface(data['control'])
     for attr in c.listAttr(wrist,keyable=True,scalar=True) or []:
         p=wrist+'.'+attr
-        sel=om.MSelectionList();sel.add(p)
-        if om.MFnAttribute(sel.getPlug(0).attribute()).isProxyAttribute:
-            p=c.connectionInfo(p,sfd=True) or p
+        visited=set()
+        while p not in visited:
+            visited.add(p);sel=om.MSelectionList();sel.add(p)
+            if not om.MFnAttribute(sel.getPlug(0).attribute()).isProxyAttribute:break
+            upstream=c.connectionInfo(p,sfd=True)
+            if not upstream:break
+            p=upstream
         try:curves.update(live_layers.curves_for_plug(p,registered))
         except ValueError:continue
     # Include the source mode and IK channels explicitly: Maya versions differ

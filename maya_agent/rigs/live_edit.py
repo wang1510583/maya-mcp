@@ -34,6 +34,11 @@ def _world(node, desired, destinations):
     import math
     import maya.cmds as c
     import maya.api.OpenMaya as om
+    from . import zero_channels
+    def destination(attr):
+        src=node+'.'+attr
+        dst=destinations.get(src)
+        return dst if dst==src else zero_channels.resolve(dst or src)
     if c.objExists(node+'.liveRotationData'):
         from .live_rotation import solve_rotation
         proxy=destinations[node+'.rotateX'].rsplit('.',1)[0]
@@ -58,14 +63,15 @@ def _world(node, desired, destinations):
     previous = om.MEulerRotation(*[math.radians(v) for v in c.getAttr(node+'.rotate')[0]], order)
     euler = euler.closestSolution(previous)
     for axis, value in zip('XYZ', euler):
-        plug = destinations.get(node+'.rotate'+axis, node+'.rotate'+axis)
-        if not c.getAttr(plug, lock=True) and abs(c.getAttr(plug)-math.degrees(value))>1e-9:
-            _set(plug, math.degrees(value))
+        plug = destination('rotate'+axis)
+        value=math.degrees(value)-zero_channels.offset(plug)
+        if not c.getAttr(plug, lock=True) and abs(c.getAttr(plug)-value)>1e-9:
+            _set(plug, value)
     # Maya's xform -rp query returns the origin for joints with nonzero pivots.
     actual = list(_frame(node))[12:15]
     delta = om.MVector(*[desired[12+i]-actual[i] for i in range(3)])*parent.inverse()
     for axis, value in zip('XYZ', delta):
-        plug = destinations.get(node+'.translate'+axis, node+'.translate'+axis)
+        plug = destination('translate'+axis)
         if not c.getAttr(plug, lock=True) and abs(value)>1e-9:
             _set(plug, c.getAttr(plug)+value)
 
@@ -99,6 +105,8 @@ def _plan(root):
 def _snapshot(plugs):
     import maya.cmds as c
     from .live_layers import blend_nodes,curves_for_plug
+    from .zero_channels import resolve
+    plugs=[resolve(p) for p in plugs]
     values={p:c.getAttr(p) for p in plugs if not c.getAttr(p,lock=True)}
     curves={}
     registered=blend_nodes();nodes=set()
@@ -184,13 +192,15 @@ overrides. Never call on load, selection, time change or metadata upgrade.
 
 def _apply_plan(destinations,frames,zero,restore,endpoint=None):
     import maya.cmds as c
+    from . import zero_channels
     for node, matrix in frames:
         _world(node, matrix, destinations)
     for node in zero:
         for attr in TR:
-            plug = destinations.get(node+'.'+attr, node+'.'+attr)
-            if not c.getAttr(plug, lock=True) and abs(c.getAttr(plug))>1e-9:
-                _set(plug, 0)
+            plug = zero_channels.resolve(destinations.get(node+'.'+attr, node+'.'+attr))
+            value=-zero_channels.offset(plug)
+            if not c.getAttr(plug, lock=True) and abs(c.getAttr(plug)-value)>1e-9:
+                _set(plug, value)
     if endpoint:
         for node in zero:
             # Pivot compensation is a frozen animation reference. Cancel its
@@ -198,7 +208,7 @@ def _apply_plan(destinations,frames,zero,restore,endpoint=None):
             # input pivot shares the displayed final-foot coordinate frame.
             matrix=c.getAttr(node+'.matrix')
             for i,axis in enumerate('XYZ'):
-                plug=destinations.get(node+'.translate'+axis,node+'.translate'+axis)
+                plug=zero_channels.resolve(destinations.get(node+'.translate'+axis,node+'.translate'+axis))
                 if not c.getAttr(plug,lock=True) and abs(matrix[12+i])>1e-9:
                     _set(plug,c.getAttr(plug)-matrix[12+i])
         # Animated pivot compensation can leave a residual local translation
@@ -229,6 +239,9 @@ def _roots():
     import maya.cmds as c
     roots=[]
     for selected in c.ls(sl=True,long=True,objectsOnly=True) or []:
+        if c.objExists(selected+'.armSharedPole'):
+            linked=c.listConnections(selected+'.armSharedPole',s=True,d=False) or []
+            if linked:roots.append(linked[0]);continue
         if c.objExists(selected+'.armSharedWrist'):
             from .arm_ik_shared import active
             linked=c.listConnections(selected+'.armSharedWrist',s=True,d=False) or []
@@ -249,7 +262,9 @@ def before_drag(context):
     import maya.cmds as c
     global _gesture
     roots=_roots()
-    if not roots:return
+    from . import zero_channels
+    generic=zero_channels.selected_generic()
+    if not roots and not generic:return
     if _gesture:after_drag(context)
     c.undoInfo(openChunk=True,chunkName='LiveLimbTransform')
     _gesture={'snapshots':[],'prepared':{},'auto':c.autoKeyframe(q=True,state=True),'rotation_layers':[], 'arm_gestures':[]}
@@ -268,9 +283,15 @@ def before_drag(context):
                 _gesture['snapshots'].append(snapshot)
                 _gesture['prepared'].update(snapshot[0])
                 continue
+            if any(json.loads(c.getAttr(n+'.zeroChannelData'))['root']==root.rsplit('|',1)[-1] for n in generic):continue
             snapshot=prepare(root)
             _gesture['snapshots'].append(snapshot)
             _gesture['prepared'].update({p:c.getAttr(p) for p in snapshot[0]})
+        for control in generic:
+            c.autoKeyframe(state=False)
+            entry=zero_channels.begin(control);snapshot=entry['snapshot']
+            _gesture['arm_gestures'].append(entry);_gesture['snapshots'].append(snapshot)
+            _gesture['prepared'].update(snapshot[0])
         # Auto Key is suspended during live input isolation. Include ordinary
         # co-selected controls so mixed selections retain Maya's key behavior.
         native_plugs=[]
@@ -398,6 +419,9 @@ def install():
     """
     import maya.cmds as c
     if c.about(batch=True):return False
+    if c.ls('::*.zeroPartData',objectsOnly=True):
+        from . import zero_manual
+        zero_manual.install()
     # Migrate only sessions carrying our obsolete experimental context hooks.
     # Empty Python callbacks are not equivalent to clearing a MEL context hook.
     if globals().pop('_hooks',None) is not None:
@@ -418,7 +442,7 @@ def install():
     import maya.api.OpenMayaUI as ui
     global _filter
     if globals().get('_filter') is not None:
-        if globals().get('_filter_version')==6:return True
+        if globals().get('_filter_version')==7:return True
         QtWidgets.QApplication.instance().removeEventFilter(_filter)
         _filter.deleteLater();_filter=None
     class Filter(QtCore.QObject):
@@ -449,7 +473,8 @@ def install():
             if not isinstance(watched,QtWidgets.QWidget):return False
             if event.modifiers() & QtCore.Qt.AltModifier:return False
             if c.contextInfo(c.currentCtx(),c=True) not in ('manipMove','manipRotate'):return False
-            if not _roots():return False
+            from .zero_channels import selected_generic
+            if not _roots() and not selected_generic():return False
             pointers=set()
             for panel in c.getPanel(type='modelPanel') or []:
                 try:pointers.add(int(ui.M3dView.getM3dViewFromModelPanel(panel).widget()))
@@ -464,6 +489,6 @@ def install():
                 return True
             return False
     _filter=Filter(QtWidgets.QApplication.instance())
-    globals()['_filter_version']=6
+    globals()['_filter_version']=7
     QtWidgets.QApplication.instance().installEventFilter(_filter)
     return True

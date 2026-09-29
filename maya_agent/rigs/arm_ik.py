@@ -17,6 +17,9 @@ if '_pending' not in globals():_pending={}
 
 def _switch_module(root):
     import maya.cmds as c
+    if c.objExists(root+'.chestSpaceData'):
+        from . import chest_space
+        return chest_space
     if c.objExists(root+'.bodyDriveData'):
         from . import body_direction
         return body_direction
@@ -35,7 +38,7 @@ def _switch_module(root):
 
 def _has_mode(root):
     import maya.cmds as c
-    return any(c.objExists(root+'.'+a) for a in ('armWorldIKData','footSpaceData','upperArmSpaceData','matchedSpaceData','bodyDriveData'))
+    return any(c.objExists(root+'.'+a) for a in ('armWorldIKData','footSpaceData','upperArmSpaceData','matchedSpaceData','bodyDriveData','chestSpaceData'))
 
 
 def _sync_mode_cache():
@@ -324,9 +327,13 @@ def switch(root,value,key=None,previous=None,_defer_close=False):
             # change its solve.
             for attr in TR:
                 p=data['inputs']['end_locator']+'.'+attr
-                if not c.getAttr(p,lock=True):c.setAttr(p,0)
+                if not c.getAttr(p,lock=True):
+                    from .zero_channels import absolute
+                    absolute(p,0)
             live_edit._world(data['inputs']['end_fk'],end_matrix,dest)
-            c.xform(data['inputs']['pole_locator'],ws=True,t=list(pole_matrix)[12:15])
+            pole=data['inputs']['pole_locator']
+            desired=list(live_edit._frame(pole));desired[12:15]=list(pole_matrix)[12:15]
+            live_edit._world(pole,om.MMatrix(desired),dest)
             for src,dst in zip(data['offset_attrs'],data['offset_inputs']):c.setAttr(dst,c.getAttr(src))
             # Keep the exact solver goals. Normal live manipulation can rebase
             # FK on the next gesture; doing it here can change a softened pose.
@@ -340,6 +347,14 @@ def switch(root,value,key=None,previous=None,_defer_close=False):
         selected=c.ls(sl=True,long=True) or []
         candidates={data['fk_wrist'],data['inputs']['end_fk'],data['controls']['wrist'],data['controls']['pole']}
         destination=data['fk_wrist'] if data.get('shared_wrist') else data['controls']['wrist'] if _mode(new) else data['fk_wrist']
+        from .zero_channels import surface
+        candidates.update(surface(n) for n in list(candidates));destination=surface(destination)
+        if data.get('shared_pole'):
+            pole_destination=data['shared_pole']['control']
+            pole_candidates={data['controls']['pole'],data['inputs']['pole_locator'],pole_destination}
+            selected=[pole_destination if n.rsplit('|',1)[-1] in pole_candidates else n for n in selected]
+            candidates.difference_update(pole_candidates)
+            c.select(selected,r=True) if selected else None
         if any(n.rsplit('|',1)[-1] in candidates for n in selected):
             c.select(list(dict.fromkeys(destination if n.rsplit('|',1)[-1] in candidates else n for n in selected)),r=True)
         return dict(changed=True,mode=_mode(new),max_pose_error=error)
@@ -378,6 +393,7 @@ def install():
             except RuntimeError:pass
             _callbacks.pop(root,None)
     roots=(c.ls('*:rig_root',type='transform') or [])+(c.ls('*.upperArmSpaceData','*:*.upperArmSpaceData','*.matchedSpaceData','*:*.matchedSpaceData','*.bodyDriveData','*:*.bodyDriveData',objectsOnly=True) or [])
+    roots+=c.ls('::*.chestSpaceData',objectsOnly=True) or []
     for root in dict.fromkeys(roots):
         if not _has_mode(root) or root in _callbacks:continue
         data=_switch_module(root)._data(root);node,attr=data['global_plug'].rsplit('.',1)

@@ -166,7 +166,7 @@ def validate_follow(node,data,label):
     return node
 
 
-def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,hips_follow=None):
+def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,hips_follow=None,zero_controls=False):
     import maya.cmds as c
     from maya_agent.rigs.custom_body.animation import Transfer
     from maya_agent.rigs.custom_body.targets import restore
@@ -294,6 +294,21 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
         if 'body' in built:
             from maya_agent.rigs.body_direction import enable as enable_body_direction
             enable_body_direction(built['body'])
+            from maya_agent.rigs.body_follow import enable as enable_body_follow
+            enable_body_follow(built['body'])
+            from maya_agent.rigs.chest_space import enable as enable_chest_space
+            enable_chest_space(built['body'])
+        if zero_controls:
+            from maya_agent.rigs.zero_channels import build as create_zero_channels
+            create_zero_channels(result)
+            for f in sorted({frame}|{f for item in data.values() for f in item['frames']}):
+                c.currentTime(f)
+                for key,item in data.items():
+                    if f not in item['motion'] or not item['options'].get('drive_targets',True):continue
+                    for sample,pose in zip(item['samples'],item['motion'][f]):
+                        delta=max(abs(a-b) for a,b in zip(c.xform(sample['node'],q=True,ws=True,m=True),pose['matrix']))
+                        if delta>1e-4:raise RuntimeError('零位控制器未保留动画，帧 %s：%s'%(f,delta))
+            c.currentTime(frame)
         c.addAttr(root,ln='integratedRigData',dt='string')
         c.setAttr(root+'.integratedRigData',json.dumps(result,ensure_ascii=False),type='string',lock=True)
         return result

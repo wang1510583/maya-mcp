@@ -100,12 +100,12 @@ def install(control, data):
         raise
 
 
-def switch(control,value,key=None,previous=None):
+def switch(control,value,key=None,previous=None,mode_plug=None):
     import maya.cmds as c
     import maya.api.OpenMaya as om
     from . import body_direction,arm_ik,live_edit,live_layers
     if value not in (0,1):raise ValueError('身体驱动仅支持 0 或 1。')
-    data=body_direction._data(control);plug=data['global_plug'];old=c.getAttr(plug) if previous is None else previous
+    data=body_direction._data(control);plug=mode_plug or data['global_plug'];old=c.getAttr(plug) if previous is None else previous
     if old==value:return dict(changed=False)
     auto=c.autoKeyframe(q=True,state=True);key=auto if key is None else key;busy=arm_ik._busy;arm_ik._busy=True
     c.undoInfo(openChunk=True,chunkName='MatchBodyDirection');c.autoKeyframe(state=False);snapshot=None
@@ -114,16 +114,20 @@ def switch(control,value,key=None,previous=None):
         data=install(control,data);controls=data['controls'];entries=data['match_inputs']
         frames={n:live_edit._frame(n) for n in controls}
         baseline={n:c.xform(n,q=True,ws=True,m=True) for n in data['joints']}
-        raw=[plug]+[n+'.'+a for n in controls for a in live_edit.TR]
-        offsets=[p for n in controls for channel in ('translate','rotate') for p in entries[n]['offsets'][str(value)+channel]]
-        start=control+'.bodyMatchStart'+str(value)
+        from .zero_channels import resolve
+        raw=list(dict.fromkeys([plug,data['global_plug']]+([data['chest_global']] if data.get('chest_global') else [])))+[resolve(n+'.'+a) for n in controls for a in live_edit.TR]
+        body_mode=value if plug==data['global_plug'] else int(c.getAttr(data['global_plug']))
+        chest_mode=(value if plug==data.get('chest_global') else int(c.getAttr(data['chest_global']))) if data.get('chest_global') else 0
+        state=body_mode+2*chest_mode
+        offsets=[p for n in controls for channel in ('translate','rotate') for p in entries[n]['offsets'][str(state)+channel]]
+        start=control+'.bodyMatchStart'+str(state)
         fences=[];live_edit._fence('before',fences);snapshot=live_edit._snapshot(raw+offsets+[start]);fences.append(snapshot)
         first=not any(c.connectionInfo(p,sfd=True) for p in offsets)
         if key and first:c.setAttr(start,c.currentTime(q=True))
         elif key:c.setAttr(start,min(c.getAttr(start),c.currentTime(q=True)))
         elif first:c.setAttr(start,-1e12)
         c.setAttr(plug,value)
-        endpoints=[controls[0],controls[-1]] if not value else [controls[-1],controls[0]]
+        endpoints=[controls[0],controls[-1]] if not body_mode else [controls[-1],controls[0]]
         for n in endpoints+controls[1:-1]:
             e=entries[n]
             raw_matrix=om.MMatrix(c.getAttr(n+'.matrix'))*om.MMatrix(c.getAttr(n+'.offsetParentMatrix'))
@@ -132,9 +136,9 @@ def switch(control,value,key=None,previous=None):
             parent=om.MMatrix(c.xform(e['parent'],q=True,ws=True,m=True))
             euler=om.MTransformationMatrix(desired*parent.inverse()).rotation(asQuaternion=True).asEulerRotation()
             order=c.getAttr(n+'.rotateOrder');euler.reorderIt(order)
-            euler=euler.closestSolution(om.MEulerRotation(*[math.radians(c.getAttr(p)) for p in e['offsets'][str(value)+'rotate']],order))
-            for p,v in zip(e['offsets'][str(value)+'rotate'],euler):c.setAttr(p,math.degrees(v))
-        translation=[p for n in controls for p in entries[n]['offsets'][str(value)+'translate']]
+            euler=euler.closestSolution(om.MEulerRotation(*[math.radians(c.getAttr(p)) for p in e['offsets'][str(state)+'rotate']],order))
+            for p,v in zip(e['offsets'][str(state)+'rotate'],euler):c.setAttr(p,math.degrees(v))
+        translation=[p for n in controls for p in entries[n]['offsets'][str(state)+'translate']]
         for p in translation:c.setAttr(p,0)
         def positions():return [x for n in controls for x in list(live_edit._frame(n))[12:15]]
         base=positions();columns=[]

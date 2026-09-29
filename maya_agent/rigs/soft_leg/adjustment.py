@@ -158,7 +158,7 @@ def set_mode(rig,enabled,cancel=False):
             positions={k:display_pivot(root,data,k,p) for k,p in positions.items()}
             # Visible handles intentionally move with the edited pivot. Actual
             # solver inputs, output joints and driven targets must stay fixed.
-            nodes=[n for n in c.ls(ns+':*',type='transform') if c.objExists(n) and not c.objExists(n+'.liveInput')]
+            nodes=[n for n in c.ls(ns+':*',type='transform') if c.objExists(n) and not c.objExists(n+'.liveInput') and not c.objExists(n+'.zeroChannelData')]
             matrices={n:c.xform(n,q=True,ws=True,m=True) for n in nodes}
             snapshots={n:{a:c.getAttr(n+'.'+a)[0] for a in PIVOTS} for n in data['controls'].values()}
             shapes={s:c.getAttr(s+'.localPosition')[0] for n in data['controls'].values()

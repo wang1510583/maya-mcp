@@ -9,32 +9,33 @@ import json
 
 
 if '_alignment_fallbacks' not in globals():_alignment_fallbacks=[]
-if '_fallback_notified' not in globals():_fallback_notified=set()
 if '_refresh_holds' not in globals():_refresh_holds=set()
 
 
 def _record_fallback(error,phase):
-    """Keep bounded diagnostics without serializing transient state in a rig."""
+    """Record an expected, successful fallback without interrupting animation.
+
+    The pose check has already restored the valid input. This is not a rejected
+    gesture: edits, keying and undo continue normally. Keep diagnostic evidence
+    without warning on a recovery that requires no action from the animator.
+    """
     import maya.cmds as c
     _alignment_fallbacks.append(dict(root=error.root,error=error.error,phase=phase,frame=c.currentTime(q=True)))
     del _alignment_fallbacks[:-16]
-    identity=(c.ls(error.root,uuid=True) or [error.root])[0]
-    if identity not in _fallback_notified:
-        _fallback_notified.add(identity)
-        c.warning('此姿态暂不适合自动校准，已保留当前姿态并继续使用原输入通道：'+error.root.rsplit('|',1)[-1])
 
 
 def selected_roles(root):
     import maya.cmds as c
+    from .zero_channels import surface
     if not c.objExists(root+'.liveAlignmentData'):
         from . import arm_ik,arm_ik_shared
         d=arm_ik._data(root)
-        return ['end_fk'] if arm_ik_shared.active(root) and set(c.ls(sl=True,long=True) or []).intersection(c.ls(d['fk_wrist'],long=True)) else []
+        return ['end_fk'] if arm_ik_shared.active(root) and set(c.ls(sl=True,long=True) or []).intersection(c.ls(surface(d['fk_wrist']),long=True)) else []
     data=json.loads(c.getAttr(root+'.liveAlignmentData'))
     if data['kind']!='arm':return []
     selected=set(c.ls(sl=True,long=True,objectsOnly=True) or [])
     return [r for r in ('shoulder_fk','middle_fk','end_fk')
-            if selected.intersection(c.ls(data['controls'][r],long=True) or [])]
+            if selected.intersection(c.ls(surface(data['controls'][r]),long=True) or [])]
 
 
 def selected_role(root):
@@ -77,7 +78,8 @@ def begin(root,role,_setup=None):
             # prepare has already restored the exact pre-alignment channels and
             # curves. Retain this pose and interpret the gesture as a world delta.
             snapshot=exc.snapshot;aligned=False;_record_fallback(exc,'begin')
-    proxy=data['controls'][role];source=data['inputs'][role]
+    from . import zero_channels
+    proxy=zero_channels.surface(data['controls'][role]);source=data['inputs'][role]
     entry=dict(data=data,role=role,mode=mode,snapshot=snapshot,proxy=proxy,source=source,
                edges=[],curve_edges=[],changed=False,finished=False)
     entry['setup']=(snapshot,aligned)
@@ -89,10 +91,13 @@ def begin(root,role,_setup=None):
         entry['native_attrs']=TR
         for attr in TR:
             src=proxy+'.'+attr;dst=source+'.'+attr
-            if not c.isConnected(src,dst):
+            actual=c.connectionInfo(dst,sfd=True)
+            expected=data['controls'][role]+'.'+attr
+            if not c.isConnected(expected,dst):
                 if not c.getAttr(src,lock=True):raise ValueError('手臂通道连接已被修改：'+dst)
                 continue
-            value=c.getAttr(dst);c.disconnectAttr(src,dst);c.setAttr(dst,value)
+            value=c.getAttr(dst);c.disconnectAttr(actual,dst);c.setAttr(dst,value)
+            entry.setdefault('input_edges',{})[dst]=actual
             entry['edges'].append((src,dst));entry['destinations'][dst]=dst
         for attr in TR:
             plug=proxy+'.'+attr
@@ -103,7 +108,7 @@ def begin(root,role,_setup=None):
                 entry['curve_edges'].append((incoming,plug))
         # Neutral local rotations make Maya's manipulator use the displayed
         # axes rather than the historical Euler values of the hidden input.
-        local=om.MTransformationMatrix(om.MMatrix(c.getAttr(proxy+'.matrix')))
+        local=neutral_local(proxy)
         local.setRotation(om.MEulerRotation());c.setAttr(proxy+'.rotate',0,0,0)
         entry['local']=local.asMatrix();entry['parent']=entry['local'].inverse()*display
         entry['display_edge']=c.connectionInfo(proxy+'.offsetParentMatrix',sourceFromDestination=True)
@@ -117,9 +122,25 @@ def begin(root,role,_setup=None):
     except Exception:
         if entry.get('display_edge'):restore_display(entry)
         for incoming,plug in entry['curve_edges']:c.connectAttr(incoming,plug,force=True)
-        for src,dst in entry['edges']:c.connectAttr(src,dst,force=True)
+        for src,dst in entry['edges']:c.connectAttr(entry.get('input_edges',{}).get(dst,src),dst,force=True)
         _restore(snapshot)
         raise
+
+
+def neutral_local(proxy):
+    """Read authored TRS instead of the stale parallel-evaluation matrix cache.
+
+    These display surfaces are plain transforms with zero pivots. The matrix
+    output can lag inverseMatrix after an isolated drag; using that cache
+    counts the previous translation twice on the next mouse press.
+    """
+    import maya.cmds as c
+    import maya.api.OpenMaya as om
+    local=om.MTransformationMatrix()
+    local.setTranslation(om.MVector(c.getAttr(proxy+'.translate')[0]),om.MSpace.kTransform)
+    local.setScale(c.getAttr(proxy+'.scale')[0],om.MSpace.kTransform)
+    local.setShear(c.getAttr(proxy+'.shear')[0],om.MSpace.kTransform)
+    return local
 
 
 def prepare_native_sample(entry,suspend=True):
@@ -192,14 +213,15 @@ def update(entry,force=False,_restore_display=True):
 
 def _reconnect(entry,values):
     import maya.cmds as c
+    from .zero_channels import offset
     if entry.get('shared_ik'):
         from .arm_ik_shared import reconnect
         reconnect(entry);return
     for src,dst in entry['edges']:
-        c.setAttr(src,values[src]);c.connectAttr(src,dst,force=True)
+        c.setAttr(src,values[src]-offset(src));c.connectAttr(entry.get('input_edges',{}).get(dst,src),dst,force=True)
     for incoming,plug in entry['curve_edges']:
         c.connectAttr(incoming,plug,force=True)
-    for plug,dst in entry['edges']:c.setAttr(plug,values[plug])
+    for plug,dst in entry['edges']:c.setAttr(plug,values[plug]-offset(plug))
     entry['finished']=True
 
 
@@ -217,10 +239,11 @@ def finish(entry,cancel=False):
     # Capture every solution before reconnecting any animated parent or child.
     values={src:c.getAttr(dst) for child in children for src,dst in child['edges']}
     for child in children:_reconnect(child,values)
-    for plug,value in values.items():c.setAttr(plug,value)
+    from .zero_channels import offset
+    for plug,value in values.items():c.setAttr(plug,value-offset(plug))
     entry['finished']=True
     if cancel or not entry['changed']:_restore(entry['snapshot'])
-    elif any(child.get('shared_ik') for child in children):return
+    elif any(child.get('shared_ik') or child.get('generic_zero') for child in children):return
     else:
         # Store the same canonical pose that the next gesture will start from.
         # Otherwise a moved elbow is keyed as an offset at frame A, then the

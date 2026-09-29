@@ -42,6 +42,8 @@ def edit_layer(roots=()):
         for root in roots:
             if arm_ik_shared.active(root):
                 plugs.extend(arm_ik._data(root)['controls']['wrist']+'.'+a for a in arm_ik.TR)
+            if arm_ik_shared.active(root,'pole_locator'):
+                plugs.extend(arm_ik._data(root)['controls']['pole']+'.translate'+a for a in 'XYZ')
         plugs.extend(n+'.'+a for n in c.ls(sl=True,long=True,objectsOnly=True) or []
                      for a in ('translateX','translateY','translateZ','rotateX','rotateY','rotateZ') if c.objExists(n+'.'+a))
         registered=blend_nodes()
@@ -103,6 +105,8 @@ def commit(layer,snapshots,auto,force_plugs=()):
 def key_mode_switch(snapshot,plug,force_plugs=()):
     """Record matched pose and stepped mode only at the current frame."""
     import maya.cmds as c
+    from .zero_channels import resolve
+    force_plugs=[resolve(p) for p in force_plugs]
     layer=edit_layer();final={p:c.getAttr(p) for p in snapshot[0]}
     force=set(force_plugs)|{plug}
     if layer:commit(layer,[snapshot],True,force_plugs=force)
