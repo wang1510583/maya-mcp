@@ -419,4 +419,6 @@ def install():
     _sync_mode_cache()
     from . import wrist_key_colors
     wrist_key_colors.install()
+    from . import switch_panel
+    switch_panel.install()
     return len(_callbacks)

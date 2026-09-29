@@ -129,6 +129,9 @@ class IntegratedWindow(QtWidgets.QDialog):
         self.diagram=Diagram(self);layout.addWidget(self.diagram,1)
         self.create_button=self.diagram.create_button
         self.add_global_options()
+        panel_button=QtWidgets.QPushButton('创建 / 显示模式切换面板',self)
+        panel_button.setToolTip('在已创建角色右侧生成场景滑块；选择圆圈后按 W，沿横轴拖动切换。')
+        panel_button.clicked.connect(lambda:self.safe(self.create_switch_panel));layout.addWidget(panel_button)
         hint=QtWidgets.QLabel('通用根控制整体移动；胸 / 腰用于部位跟随。\n右键设置动画范围、多空间及腿部支点调整。')
         hint.setWordWrap(True)
         hint.setStyleSheet('color:#d0d0d0;font-size:12px;');layout.addWidget(hint)
@@ -284,6 +287,11 @@ class IntegratedWindow(QtWidgets.QDialog):
                  command=lambda *_:(self.unload(key),c.deleteUI(WINDOW)))
         self.details_windows[key]=w
         return w
+    def create_switch_panel(self):
+        from maya_agent.rigs.switch_panel import build_selected
+        panel=build_selected();c.select(panel['root'],r=True)
+        self.message('模式切换面板已就绪：选圆圈，W 左右拖动；左 0、右 1。')
+        return panel
     def create(self):
         from . import build
         config={k:dict(row,targets=targets(k)) for k,row in _state.items() if row['uuids']}
@@ -291,6 +299,7 @@ class IntegratedWindow(QtWidgets.QDialog):
             row['copy_animation']=_global_options['copy_animation']
             if PARTS[key]['kind'] in ('arm','leg'):row['live_alignment']=_global_options['live_alignment']
         self.create_button.setEnabled(False)
+        c.undoInfo(openChunk=True,chunkName='CreateIntegratedRigWithPanel')
         try:
             root=None
             if _root_state['uuid']:
@@ -301,9 +310,12 @@ class IntegratedWindow(QtWidgets.QDialog):
             hips=self.follow_target('hips') if 'body' not in config else None
             self.last_result=build(config,namespace=self.namespace.text().strip(),general_root=root,
                                    chest_follow=chest,hips_follow=hips)
+            from maya_agent.rigs.switch_panel import build as build_switch_panel,targets as panel_targets
+            if panel_targets(self.last_result):build_switch_panel(self.last_result['root'])
             self.message('已创建 '+str(len(self.last_result['parts']))+' 个部位，已按参考结构连接控制器和部位起点。 Ctrl+Z 可整体撤销。')
             return self.last_result
-        finally:self.create_button.setEnabled(True)
+        finally:
+            self.create_button.setEnabled(True);c.undoInfo(closeChunk=True)
 
 
 def show():

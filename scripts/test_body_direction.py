@@ -95,6 +95,27 @@ def verify_keys(layer=None,weight=1.0):
         if state:cleanup()
 
 
+def verify_translation_precision():
+    """Rotated, translated hips exercise float rounding in the body graph."""
+    try:
+        rig=setup();h=rig['controls']['hips'];ch=rig['controls']['chest']
+        c.setAttr(h+'.translate',-16.4883141596,-3.7670298639,-16.5066641775)
+        c.setAttr(h+'.rotate',5.5143107315,-36.2401402042,1.2081861839)
+        c.setAttr(ch+'.rotate',-35.7258279084,-15.1147596064,-29.9644408605)
+        baseline=pose();reports=[]
+        for frame,mode in ((10,1),(20,0),(30,1),(40,0)):
+            c.currentTime(frame)
+            report=body_direction.switch(h,mode,key=True)
+            c.currentTime(frame+1);c.currentTime(frame)
+            report['replay_error']=error(baseline,pose())
+            assert report['replay_error']<1e-5,report
+            reports.append(report)
+        assert sorted(set(c.keyframe(h+'.bodyDrive',q=True,tc=True)))==[10,20,30,40]
+        return reports
+    finally:
+        if state:cleanup()
+
+
 def setup_native(auto=True):
     """After idle, check_native(1); defer undo/redo and check 0/1, then cleanup."""
     import functools,maya.utils

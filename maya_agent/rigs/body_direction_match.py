@@ -6,6 +6,25 @@ before its first sample it is identically zero, without a preceding-frame key.
 import json
 import math
 
+POSITION_TOLERANCE_CM = 0.02
+BASIS_TOLERANCE = 1e-5
+
+
+def _check_pose(baseline, current, cm_per_unit=1.0):
+    """Separate world distance from rotation/scale matrix tolerances."""
+    position=basis=overall=0.0
+    for n,before in baseline.items():
+        delta=[abs(a-b) for a,b in zip(before,current[n])]
+        if not all(math.isfinite(v) for v in delta):
+            raise RuntimeError('身体驱动姿态校验出现无效数值，已回退。')
+        position=max(position,math.sqrt(sum(v*v for v in delta[12:15]))*cm_per_unit)
+        basis=max(basis,max(delta[:12]))
+        overall=max(overall,max(delta))
+    if position>POSITION_TOLERANCE_CM or basis>BASIS_TOLERANCE:
+        raise RuntimeError('身体驱动切换未保留姿态，已回退：位置误差 %.9g 厘米（允许 %.9g），旋转/缩放矩阵误差 %.9g（允许 %.9g）'
+                           %(position,POSITION_TOLERANCE_CM,basis,BASIS_TOLERANCE))
+    return overall
+
 
 def install(control, data):
     import maya.cmds as c
@@ -122,11 +141,21 @@ def switch(control,value,key=None,previous=None):
         for p in translation:
             c.setAttr(p,1);columns.append([x-y for x,y in zip(positions(),base)]);c.setAttr(p,0)
         wanted=[x for n in controls for x in list(frames[n])[12:15]]
-        solved=body_direction._linear_solve(list(zip(*columns)),[x-y for x,y in zip(wanted,base)])
+        jacobian=list(zip(*columns))
+        solved=body_direction._linear_solve(jacobian,[x-y for x,y in zip(wanted,base)])
         for p,v in zip(translation,solved):c.setAttr(p,v)
-        def error():return max(abs(x-y) for n,m in baseline.items() for x,y in zip(m,c.xform(n,q=True,ws=True,m=True)))
+        # Body graphs include float-valued multiplyDivide/plusMinusAverage
+        # nodes. Unit probes accumulate rounding when solving large offsets.
+        # Still minimize error even when the final position tolerance permits it.
+        for _ in range(4):
+            residual=[x-y for x,y in zip(wanted,positions())]
+            if max(abs(v) for v in residual)<1e-7:break
+            correction=body_direction._linear_solve(jacobian,residual)
+            for p,v in zip(translation,correction):c.setAttr(p,c.getAttr(p)+v)
+        cm_per_unit=om.MDistance(1.0,om.MDistance.uiUnit()).asCentimeters()
+        def error():
+            return _check_pose(baseline,{n:c.xform(n,q=True,ws=True,m=True) for n in baseline},cm_per_unit)
         delta=error()
-        if delta>1e-5:raise RuntimeError('身体驱动切换未保留姿态，已回退：'+str(delta))
         if key:
             final={p:c.getAttr(p) for p in offsets}
             # Matching is structural, not additive animation. Keep it outside
@@ -137,7 +166,6 @@ def switch(control,value,key=None,previous=None):
             live_layers.key_mode_switch(raw_snapshot,plug,force_plugs=raw)
             for p,v in final.items():c.setAttr(p,v)
         delta=error()
-        if delta>1e-5:raise RuntimeError('身体驱动记录关键帧后姿态不一致：'+str(delta))
         live_edit._fence('after',[live_edit._snapshot(snapshot[0])])
         return dict(changed=True,mode=value,max_pose_error=delta)
     except Exception:
