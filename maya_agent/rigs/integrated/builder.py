@@ -273,14 +273,23 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
             if PARTS[key]['kind'] in ('arm','leg') and data[key]['options'].get('live_alignment',False):
                 enable_live_alignment(part,PARTS[key]['kind'])
         from maya_agent.rigs.arm_ik import enable as enable_world_ik
+        from maya_agent.rigs.upper_arm_space import enable as enable_upper_arm_space
         for key,part in built.items():
             if PARTS[key]['kind']=='arm' and data[key]['options'].get('space_wrist',False):
                 enable_world_ik(part)
+            if PARTS[key]['kind']=='arm' and data[key]['options'].get('space_upper_arm',False):
+                space=next(s for s in spaces if s['control']==part['controls']['shoulder_fk'])
+                enable_upper_arm_space(part,space)
         from maya_agent.rigs.foot_space import enable as enable_foot_space
+        from maya_agent.rigs.head_knee_space import enable as enable_head_knee_space
         for key,part in built.items():
             if PARTS[key]['kind']=='leg' and data[key]['options'].get('space_foot',False):
                 space=next(s for s in spaces if s['control']==part['controls']['foot'])
                 enable_foot_space(part,space)
+            role='head' if key=='head' else 'knee' if PARTS[key]['kind']=='leg' else None
+            if role:
+                space=next((s for s in spaces if s['control']==part['controls'][role]),None)
+                if space:enable_head_knee_space(part,space,role)
         c.addAttr(root,ln='integratedRigData',dt='string')
         c.setAttr(root+'.integratedRigData',json.dumps(result,ensure_ascii=False),type='string',lock=True)
         return result

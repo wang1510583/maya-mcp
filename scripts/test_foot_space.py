@@ -77,6 +77,10 @@ def verify_animation(override=False,weight=1.0):
         before_curves={n:(c.keyframe(n,q=True,tc=True),c.keyframe(n,q=True,vc=True)) for n in c.ls(type='animCurve')}
         for l in c.ls(type='animLayer'):c.animLayer(l,e=True,selected=False,preferred=False)
         layer=c.animLayer('_footSpaceLayer',override=override);c.animLayer(layer,e=True,selected=True,preferred=True,weight=weight)
+        # Prior FK/world key is authored by the animator, not by switching.
+        for p in state['legs'].values():
+            plug=p['controls']['foot']+'.global'
+            c.animLayer(layer,e=True,attribute=plug);c.setKeyframe(plug,t=1,v=0,animLayer=layer,ott='step')
         for key,p in state['legs'].items():
             c.currentTime(10);a=foot_space.switch(p['root'],1,key=True);matched=pose(p)
             c.currentTime(11);c.currentTime(10);replay=error(matched,pose(p));assert replay<1e-5,(key,replay)

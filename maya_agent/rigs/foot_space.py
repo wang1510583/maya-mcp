@@ -47,38 +47,23 @@ def enable(rig,space):
 
 
 def _key(snapshot,plug,old):
-    """Key matched local transforms in the chosen layer, guarding the prior frame."""
-    import maya.cmds as c
-    from . import live_layers
-    layer=live_layers.edit_layer();final={p:c.getAttr(p) for p in snapshot[0]}
-    changed=[p for p,v in final.items() if abs(v-snapshot[0][p])>1e-8 or p==plug]
-    if layer:live_layers.commit(layer,[snapshot],False,force_plugs=[plug])
-    # Evaluate guard values in a time context; scrubbing the whole scene would
-    # discard unrelated, unkeyed edits on hips and roll controls.
-    now=c.currentTime(q=True);guard=now-1
-    for p in changed:
-        curve=c.animLayer(layer,q=True,findCurveForPlug=p) if layer else c.listConnections(p,s=True,d=False,type='animCurve')
-        if curve and c.keyframe(curve,q=True,keyframeCount=True):
-            if not c.keyframe(curve,q=True,time=(guard,guard),keyframeCount=True):c.setKeyframe(curve,t=guard,insert=True)
-        else:c.setKeyframe(p,t=guard,v=old if p==plug else c.getAttr(p,time=guard),**({'animLayer':layer} if layer else {}))
-    for p,v in final.items():c.setAttr(p,v)
-    if layer:live_layers.commit(layer,[snapshot],True,force_plugs=[plug])
-    else:
-        for p in changed:c.setKeyframe(p,v=final[p])
-    c.setKeyframe(plug,t=guard,v=old,ott='step',**({'animLayer':layer} if layer else {}))
-    curve=c.animLayer(layer,q=True,findCurveForPlug=plug) if layer else c.listConnections(plug,s=True,d=False,type='animCurve')
-    if curve:c.keyTangent(curve,e=True,ott='step')
-    for p,v in final.items():c.setAttr(p,v)
+    from .live_layers import key_mode_switch
+    key_mode_switch(snapshot,plug)
 
 
 def switch(root,value,key=None,previous=None):
+    return _switch_data(_data(root),value,key,previous,_key,'脚部')
+
+
+def _switch_data(data,value,key,previous,key_writer,label):
+    """Match one original input beneath an existing parent-space graph."""
     import maya.cmds as c
     from . import arm_ik,live_edit
-    if value not in (0,1):raise ValueError('脚部 global 仅支持 0（世界）或 1（腰部）。')
-    data=_data(root);plug=data['global_plug'];old=c.getAttr(plug) if previous is None else previous
+    if value not in (0,1):raise ValueError(label+' global 仅支持 0 或 1。')
+    root=data['root'];plug=data['global_plug'];old=c.getAttr(plug) if previous is None else previous
     if old==value:return dict(changed=False)
     auto=c.autoKeyframe(q=True,state=True);key=auto if key is None else key;busy=arm_ik._busy
-    arm_ik._busy=True;snapshot=None;edges={};c.undoInfo(openChunk=True,chunkName='MatchFootSpace');c.autoKeyframe(state=False)
+    arm_ik._busy=True;snapshot=None;edges={};c.undoInfo(openChunk=True,chunkName='MatchControllerSpace');c.autoKeyframe(state=False)
     try:
         fences=[];live_edit._fence('before',fences)
         if c.getAttr(plug)!=old:c.setAttr(plug,old)
@@ -86,6 +71,7 @@ def switch(root,value,key=None,previous=None):
         destinations={}
         if c.objExists(root+'.liveAlignmentData'):
             live=json.loads(c.getAttr(root+'.liveAlignmentData'));destinations={e['source']:e['proxy'] for e in live['entries']}
+        destinations.update(data.get('destinations',{}))
         plugs=[destinations.get(source+'.'+a,source+'.'+a) for a in live_edit.TR]+[plug]
         snapshot=live_edit._snapshot(plugs);fences.append(snapshot)
         baseline={n:c.xform(n,q=True,ws=True,m=True) for n in data['joints']}
@@ -101,8 +87,8 @@ def switch(root,value,key=None,previous=None):
         for p,e in edges.items():c.connectAttr(e,p)
         for p,v in final.items():c.setAttr(p,v)
         error=max(abs(a-b) for n,m in baseline.items() for a,b in zip(m,c.xform(n,q=True,ws=True,m=True)))
-        if error>1e-5:raise RuntimeError('脚部空间切换未保留姿态，已回退：'+str(error))
-        if key:_key(snapshot,plug,old)
+        if error>1e-5:raise RuntimeError(label+'空间切换未保留姿态，已回退：'+str(error))
+        if key:key_writer(snapshot,plug,old)
         live_edit._fence('after',[live_edit._snapshot(snapshot[0])])
         return dict(changed=True,mode=int(value),max_pose_error=error)
     except Exception:

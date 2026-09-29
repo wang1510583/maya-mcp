@@ -98,3 +98,17 @@ def commit(layer,snapshots,auto,force_plugs=()):
             for p,v in final.items():c.setAttr(p,v)
             c.setKeyframe(node,attribute=sorted(attrs),animLayer=layer)
     for p,v in final.items():c.setAttr(p,v)
+
+
+def key_mode_switch(snapshot,plug,force_plugs=()):
+    """Record matched pose and stepped mode only at the current frame."""
+    import maya.cmds as c
+    layer=edit_layer();final={p:c.getAttr(p) for p in snapshot[0]}
+    force=set(force_plugs)|{plug}
+    if layer:commit(layer,[snapshot],True,force_plugs=force)
+    else:
+        for p,v in final.items():
+            if p in force or abs(v-snapshot[0][p])>1e-8:c.setKeyframe(p,v=v)
+    curve=c.animLayer(layer,q=True,findCurveForPlug=plug) if layer else c.listConnections(plug,s=True,d=False,type='animCurve')
+    if curve:c.keyTangent(curve,e=True,ott='step')
+    for p,v in final.items():c.setAttr(p,v)

@@ -17,6 +17,12 @@ if '_pending' not in globals():_pending={}
 
 def _switch_module(root):
     import maya.cmds as c
+    if c.objExists(root+'.matchedSpaceData'):
+        from . import head_knee_space
+        return head_knee_space
+    if c.objExists(root+'.upperArmSpaceData'):
+        from . import upper_arm_space
+        return upper_arm_space
     if c.objExists(root+'.footSpaceData'):
         from . import foot_space
         return foot_space
@@ -26,7 +32,7 @@ def _switch_module(root):
 
 def _has_mode(root):
     import maya.cmds as c
-    return c.objExists(root+'.armWorldIKData') or c.objExists(root+'.footSpaceData')
+    return any(c.objExists(root+'.'+a) for a in ('armWorldIKData','footSpaceData','upperArmSpaceData','matchedSpaceData'))
 
 
 def _sync_mode_cache():
@@ -324,40 +330,9 @@ def switch(root,value,key=None,previous=None,_defer_close=False):
         error=max(abs(a-b) for n,m in baseline.items() for a,b in zip(m,c.xform(n,q=True,ws=True,m=True)))
         if error>1e-5:raise RuntimeError('FK / IK 对齐未保留姿态，已回退：'+str(error))
         if key:
-            layer=live_layers.edit_layer()
             force=[plug]
             if _mode(new):force+=data['offset_attrs']+[n+'.'+a for n in data['controls'].values() for a in TR if not c.getAttr(n+'.'+a,lock=True)]
-            # Match keys must not interpolate backwards across the preceding
-            # FK interval. Insert a guard into the active layer only.
-            final={p:c.getAttr(p) for p in snapshot[0]}
-            changed=[p for p,v in final.items() if abs(v-snapshot[0][p])>1e-8 or p in force]
-            if layer:live_layers.commit(layer,[snapshot],False,force_plugs=force)
-            now=c.currentTime(q=True);guard=now-1
-            c.currentTime(guard)
-            for p in changed:
-                curve=c.animLayer(layer,q=True,findCurveForPlug=p) if layer else c.listConnections(p,s=True,d=False,type='animCurve')
-                if curve and c.keyframe(curve,q=True,keyframeCount=True):
-                    if not c.keyframe(curve,q=True,time=(guard,guard),keyframeCount=True):c.setKeyframe(curve,t=guard,insert=True)
-                else:
-                    opts=dict(animLayer=layer) if layer else {}
-                    c.setKeyframe(p,t=guard,v=old if p==plug else c.getAttr(p),**opts)
-            c.currentTime(now)
-            for p,v in final.items():c.setAttr(p,v)
-            if layer:
-                live_layers.commit(layer,[snapshot],True,force_plugs=force)
-                final={p:c.getAttr(p) for p in snapshot[0]}
-                c.setKeyframe(plug,animLayer=layer,t=c.currentTime(q=True)-1,v=old,ott='step')
-                for p,v in final.items():c.setAttr(p,v)
-            else:
-                final={p:c.getAttr(p) for p in snapshot[0]}
-                # Mode is stepped, while FK/IK position channels retain ordinary
-                # interpolation. The prior-mode guard preserves earlier frames.
-                c.setKeyframe(plug,t=c.currentTime(q=True)-1,v=old,ott='step')
-                for p,v in final.items():
-                    if abs(v-snapshot[0][p])>1e-8 or p in force:c.setKeyframe(p,v=v)
-                for p,v in final.items():c.setAttr(p,v)
-            curve=c.animLayer(layer,q=True,findCurveForPlug=plug) if layer else c.listConnections(plug,s=True,d=False,type='animCurve')
-            if curve:c.keyTangent(curve,e=True,time=(c.currentTime(q=True),c.currentTime(q=True)),ott='step')
+            live_layers.key_mode_switch(snapshot,plug,force)
         live_edit._fence('after',[live_edit._snapshot(snapshot[0])])
         selected=c.ls(sl=True,long=True) or []
         candidates={data['fk_wrist'],data['inputs']['end_fk'],data['controls']['wrist'],data['controls']['pole']}
@@ -399,7 +374,8 @@ def install():
             try:om.MMessage.removeCallback(entry['id'])
             except RuntimeError:pass
             _callbacks.pop(root,None)
-    for root in c.ls('*:rig_root',type='transform') or []:
+    roots=(c.ls('*:rig_root',type='transform') or [])+(c.ls('*.upperArmSpaceData','*:*.upperArmSpaceData','*.matchedSpaceData','*:*.matchedSpaceData',objectsOnly=True) or [])
+    for root in dict.fromkeys(roots):
         if not _has_mode(root) or root in _callbacks:continue
         data=_switch_module(root)._data(root);node,attr=data['global_plug'].rsplit('.',1)
         selection=om.MSelectionList();selection.add(node)
@@ -438,4 +414,6 @@ def install():
                                 om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen,lambda *args:install()),
                                 om.MSceneMessage.addCallback(om.MSceneMessage.kAfterImport,lambda *args:install())])
     _sync_mode_cache()
+    from . import wrist_key_colors
+    wrist_key_colors.install()
     return len(_callbacks)
