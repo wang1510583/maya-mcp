@@ -206,7 +206,17 @@ def update(entry,force=False,_restore_display=True):
     local.setTranslation(om.MVector(*native[:3]),om.MSpace.kTransform)
     local.setRotation(om.MEulerRotation(*[math.radians(v) for v in native[3:]],c.getAttr(proxy+'.rotateOrder')))
     desired=entry['input_basis']*local.asMatrix()*entry['parent']
-    try:_world(entry['source'],desired,entry['destinations'])
+    try:
+        body_rotation='body_rotation_translate' in entry
+        _world(entry['source'],desired,entry['destinations'],solve_translation=not body_rotation)
+        if body_rotation:
+            # Translate only by what Maya's rotate tool explicitly requested;
+            # the body's own bending displacement is part of its output.
+            delta=om.MVector(*[a-b for a,b in zip(native[:3],entry['native_start'][:3])])
+            delta=delta*entry['parent']*entry['body_rotation_parent_inverse']
+            for axis,base,value in zip('XYZ',entry['body_rotation_translate'],delta):
+                plug=entry['source']+'.translate'+axis
+                if not c.getAttr(plug,lock=True):c.setAttr(plug,base+value)
     finally:
         if _restore_display:restore_display(entry)
 

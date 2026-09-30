@@ -236,6 +236,12 @@ def begin(control):
         parent=c.listRelatives(control,p=True,f=True)[0]
         entry['native_opm']=entry['parent']*om.MMatrix(c.getAttr(parent+'.worldInverseMatrix[0]'))
         entry['native_start']=[c.getAttr(control+'.'+a) for a in TR];entry['last_native']=list(entry['native_start'])
+        if d['part']=='body' and entry['mode']=='manipRotate':
+            # Rotating an endpoint bends the spine and naturally moves that
+            # endpoint's parent. Do not counteract this motion with translation.
+            # Keep explicit translation from a shared/off-center rotate pivot.
+            entry['body_rotation_translate']=list(c.getAttr(source+'.translate')[0])
+            entry['body_rotation_parent_inverse']=(om.MMatrix(c.getAttr(source+'.offsetParentMatrix'))*om.MMatrix(c.getAttr(source+'.parentMatrix[0]'))).inverse()
         # Source values are intentionally isolated until reconnect; bypass the
         # normal source-to-surface destination lookup while solving this drag.
         entry['destinations']={source+'.'+a:(source if a in d['offsets'] else control)+'.'+a for a in TR}

@@ -29,7 +29,7 @@ def _frame(node):
     return m.asMatrix()*om.MMatrix(c.xform(node, q=True, ws=True, m=True))
 
 
-def _world(node, desired, destinations):
+def _world(node, desired, destinations, solve_translation=True):
     """Solve rotation and pivot translation in the original input parent space."""
     import math
     import maya.cmds as c
@@ -67,6 +67,7 @@ def _world(node, desired, destinations):
         value=math.degrees(value)-zero_channels.offset(plug)
         if not c.getAttr(plug, lock=True) and abs(c.getAttr(plug)-value)>1e-9:
             _set(plug, value)
+    if not solve_translation:return
     # Maya's xform -rp query returns the origin for joints with nonzero pivots.
     actual = list(_frame(node))[12:15]
     delta = om.MVector(*[desired[12+i]-actual[i] for i in range(3)])*parent.inverse()
@@ -265,7 +266,10 @@ def _roots():
                 break
             parent=c.listRelatives(node,p=True,fullPath=True) or []
             node=parent[0] if parent else None
-    return list(dict.fromkeys(roots))
+    # Message links return short names; ancestor traversal returns full paths.
+    # Normalize before deduplicating or pole + FK selections isolate one arm
+    # twice and the second pass mistakes our temporary disconnection for damage.
+    return list(dict.fromkeys(n for root in roots for n in (c.ls(root,long=True) or [])))
 
 
 def before_drag(context):
