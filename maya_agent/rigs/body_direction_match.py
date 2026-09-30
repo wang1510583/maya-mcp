@@ -106,6 +106,9 @@ def switch(control,value,key=None,previous=None,mode_plug=None):
     from . import body_direction,arm_ik,live_edit,live_layers
     if value not in (0,1):raise ValueError('身体驱动仅支持 0 或 1。')
     data=body_direction._data(control);plug=mode_plug or data['global_plug'];old=c.getAttr(plug) if previous is None else previous
+    if data.get('fixed_zero'):
+        from .body_zero import switch as match_zero
+        return match_zero(control,value,key=key,previous=previous,mode_plug=mode_plug)
     if old==value:return dict(changed=False)
     auto=c.autoKeyframe(q=True,state=True);key=auto if key is None else key;busy=arm_ik._busy;arm_ik._busy=True
     c.undoInfo(openChunk=True,chunkName='MatchBodyDirection');c.autoKeyframe(state=False);snapshot=None

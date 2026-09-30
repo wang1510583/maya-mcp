@@ -142,6 +142,9 @@ def build(rig):
             c.addAttr(registry,ln='zeroSurfaceLinks',at='message',multi=True)
             for index,control in enumerate(mapping.values()):c.connectAttr(control+'.message',registry+'.zeroSurfaceLinks[%d]'%index)
     rig['zero_channels']=dict(version='1.0.0',frame=c.currentTime(q=True),controls=outputs,nodes=created)
+    if 'body' in rig['parts'] and c.objExists(rig['parts']['body']['controls']['hips']+'.bodyDriveData'):
+        from .body_zero import enable as enable_body_zero
+        rig['parts']['body']['body_drive']=enable_body_zero(rig['parts']['body'])
     from .integrated import display
     display.apply(rig)
     from .arm_ik_shared import enable_pole

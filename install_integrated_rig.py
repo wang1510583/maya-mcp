@@ -12,6 +12,7 @@ def install():
     importlib.invalidate_caches()
     importlib.reload(importlib.import_module('maya_agent.rigs.body_follow'))
     importlib.reload(importlib.import_module('maya_agent.rigs.chest_space'))
+    importlib.reload(importlib.import_module('maya_agent.rigs.body_zero'))
     for module in ('maya_agent.rigs.controller_shapes','maya_agent.rigs.zero_channels','maya_agent.rigs.zero_manual','maya_agent.rigs.wrist_key_colors','maya_agent.rigs.live_layers','maya_agent.rigs.live_rotation','maya_agent.rigs.live_arm_fk','maya_agent.rigs.live_arm_manual','maya_agent.rigs.live_edit','maya_agent.rigs.live_alignment','maya_agent.rigs.foot_space','maya_agent.rigs.head_knee_space','maya_agent.rigs.arm_ik','maya_agent.rigs.arm_ik_shared','maya_agent.rigs.upper_arm_space','maya_agent.rigs.switch_panel','maya_agent.rigs.body_direction_match','maya_agent.rigs.body_direction','maya_agent.rigs.custom_body.topology','maya_agent.rigs.custom_body.definition',
                    'maya_agent.rigs.custom_body.builder','maya_agent.rigs.custom_body',
                    'maya_agent.rigs.custom_body.targets','maya_agent.rigs.custom_body.ui','maya_agent.rigs.soft_limb',

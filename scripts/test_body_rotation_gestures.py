@@ -22,6 +22,9 @@ def verify(count=4,layer=False):
         for mode,space in ((0,0),(0,1),(1,1),(1,0)):
             c.autoKeyframe(state=False)
             chest_space.switch(chest,space,key=False);body_direction.switch(hips,mode,key=False)
+            # Fixed-zero switching intentionally updates visible TR. Record
+            # that unkeyed match before testing rotation-only key preservation.
+            c.setKeyframe(list(controls.values()),at=['tx','ty','tz'])
             for role in controls:
                 ctrl=controls[role]
                 translations={n:c.getAttr(n+'.translate')[0] for n in controls.values()}
