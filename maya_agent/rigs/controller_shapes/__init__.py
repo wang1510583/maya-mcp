@@ -3,7 +3,7 @@ import json
 import math
 from pathlib import Path
 
-VERSION = '1.0.1'
+VERSION = '1.0.3'
 DATA = Path(__file__).parent / 'data' / 'controller_shapes_v1.json'
 HELPERS = {'parameters', 'settings', 'roll', 'end_locator'}
 DISPLAY = ('overrideEnabled', 'overrideRGBColors', 'overrideColor',

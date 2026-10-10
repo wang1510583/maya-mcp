@@ -132,6 +132,11 @@ class IntegratedWindow(QtWidgets.QDialog):
         panel_button=QtWidgets.QPushButton('创建 / 显示模式切换面板',self)
         panel_button.setToolTip('在已创建角色右侧生成场景滑块；选择圆圈后按 W，沿横轴拖动切换。')
         panel_button.clicked.connect(lambda:self.safe(self.create_switch_panel));layout.addWidget(panel_button)
+        bip_button=QtWidgets.QPushButton('导入 Max BIP 动画…',self)
+        def open_bip():
+            from maya_agent.rigs.bip_retarget_ui import show_ui
+            return show_ui()
+        bip_button.clicked.connect(lambda:self.safe(open_bip));layout.addWidget(bip_button)
         hint=QtWidgets.QLabel('通用根控制整体移动；胸 / 腰用于部位跟随。\n右键设置动画范围、多空间及腿部支点调整。')
         hint.setWordWrap(True)
         hint.setStyleSheet('color:#d0d0d0;font-size:12px;');layout.addWidget(hint)
