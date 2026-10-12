@@ -87,6 +87,9 @@ def build(namespace="customBody", on_conflict="increment", segment_count=4, heig
             from maya_agent.rigs.body_direction import enable
             direction=enable(result)
             ctx.created.extend(direction['created'])
+            from .continuous_rotation import enable as enable_continuous_rotation
+            continuous = enable_continuous_rotation(result, sample_frames=frames)
+            ctx.created.extend(continuous['created'])
         result['node_count'] = len(result['nodes'])
     except Exception:
         if transfer:

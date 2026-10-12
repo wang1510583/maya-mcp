@@ -1,6 +1,6 @@
 {
   "schema_version": 7,
-  "version": "1.4.5",
+  "version": "1.4.6",
   "body_drive": "matched_hips_or_chest_direction",
   "body_drive_matching": "mode_isolated_stepped_parent_offsets_on_original_controls",
   "base_template": "body_v1.json",
@@ -12,7 +12,7 @@
   "selection_order": "hips_to_chest",
   "target_driver": "parentConstraint_maintainOffset",
   "fit": "world_position_and_rotation",
-  "rotation_blend": "rest_frame_compensated_quaternion_average",
+  "rotation_blend": "continuous_rest_frame_quaternion_average_with_pose_validation",
   "animation_transfer": "temporary_world_locators_to_solved_local_control_TR",
   "source_animation": "disconnect_and_archive_original_TR_curves",
   "animation_scope": "sampled_time_keyed_TR_only",

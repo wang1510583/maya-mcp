@@ -309,6 +309,9 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
                         delta=max(abs(a-b) for a,b in zip(c.xform(sample['node'],q=True,ws=True,m=True),pose['matrix']))
                         if delta>1e-4:raise RuntimeError('零位控制器未保留动画，帧 %s：%s'%(f,delta))
             c.currentTime(frame)
+        if 'body' in built:
+            from maya_agent.rigs.custom_body.continuous_rotation import enable as enable_continuous_rotation
+            enable_continuous_rotation(built['body'], sample_frames=data['body']['frames'])
         c.addAttr(root,ln='integratedRigData',dt='string')
         c.setAttr(root+'.integratedRigData',json.dumps(result,ensure_ascii=False),type='string',lock=True)
         return result
