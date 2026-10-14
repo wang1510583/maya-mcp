@@ -1,4 +1,9 @@
 """Maya Agent — AI-powered assistant for Maya game development workflows."""
+from pathlib import Path
+
+_rig_package = Path(__file__).resolve().parents[1] / '自定义人物绑定插件' / 'maya_agent'
+if _rig_package.is_dir() and str(_rig_package) not in __path__:
+    __path__.append(str(_rig_package))
 
 __version__ = "1.3.1"
 __app_name__ = "Maya Agent"

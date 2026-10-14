@@ -26,10 +26,13 @@ connection.json
 *.key
 
 # User scenes, captures, backups and generated reports
+/自定义人物绑定插件.zip
 outputs/
 *.ma
 !maya_agent/rigs/soft_limb/data/limb_v1.ma
 !maya_agent/rigs/soft_leg/data/leg_v1.ma
+!自定义人物绑定插件/maya_agent/rigs/soft_limb/data/limb_v1.ma
+!自定义人物绑定插件/maya_agent/rigs/soft_leg/data/leg_v1.ma
 *.mb
 *.mayaagent.json
 *.bak

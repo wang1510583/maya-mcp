@@ -46,7 +46,7 @@ def main():
         controls=dict(foot='foot_L1', heel='heel_L1', toe_end='toe_end_L1', toe='toe_L1',
                       ball='tarsus_L1', knee='Knee_L', settings='strech_ik_foot1_L1', hip='joint1'),
         template_sha256=hashlib.sha256(text.encode('utf-8')).hexdigest())
-    data=ROOT/'maya_agent/rigs/soft_leg/data'
+    data=ROOT/'自定义人物绑定插件/maya_agent/rigs/soft_leg/data'
     data.mkdir(parents=True, exist_ok=True)
     (data/'leg_v1.ma').write_text(text,encoding='utf-8')
     (data/'leg_v1.json').write_text(json.dumps(spec,ensure_ascii=False,indent=2),encoding='utf-8')
