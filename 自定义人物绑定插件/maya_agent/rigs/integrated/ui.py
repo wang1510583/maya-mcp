@@ -7,6 +7,7 @@ _instance=globals().get('_instance')
 _root_state=globals().get('_root_state',dict(uuid=None,name=None))
 _follow_state=globals().get('_follow_state',{key:dict(uuid=None,name=None) for key in ('chest','hips')})
 _global_options=globals().get('_global_options',dict(copy_animation=True,live_alignment=True))
+_generic_state=globals().get('_generic_state',{'object':None,'parent':None})
 FOLLOW_LABELS={'chest':'胸部跟随对象','hips':'腰部跟随对象'}
 _state=globals().get('_state',{key:dict(targets=[],uuids=[],connected=False,name=key,drive_targets=True,
                  copy_animation=True,sample_step=1.0) for key in PARTS})
@@ -40,6 +41,9 @@ def targets(key):
 
 
 def validate_count(key,names):
+    if PARTS[key]['kind']=='hand':
+        from maya_agent.rigs.fingers import inspect_selection
+        return inspect_selection(names)
     count=PARTS[key]['count']
     if (count and len(names)!=count) or (not count and not 2<=len(names)<=64):
         raise ValueError('{}请依次选择 {} 个骨骼或物体。'.format(PARTS[key]['label'],count or '2–64'))
@@ -64,7 +68,7 @@ class PartButton(QtWidgets.QPushButton):
 
 class Diagram(QtWidgets.QWidget):
     positions={'shoulder_R':(0,0),'head':(0,1),'shoulder_L':(0,2),
-               'arm_R':(1,0),'body':(1,1),'arm_L':(1,2),'leg_R':(2,0),'leg_L':(2,2)}
+               'arm_R':(1,0),'body':(1,1),'arm_L':(1,2),'hand_R':(2,0),'hand_L':(2,2),'leg_R':(3,0),'leg_L':(3,2)}
     def __init__(self,window):
         super().__init__();self.window=window;self.buttons={};self.lines={}
         self.setMinimumSize(330,240)
@@ -83,7 +87,7 @@ class Diagram(QtWidgets.QWidget):
         self.create_button.setCursor(QtCore.Qt.PointingHandCursor)
         self.create_button.setStyleSheet('QPushButton {background:#397b80;color:white;font-size:20px;font-weight:bold;border:0;} QPushButton:hover {background:#478e94;} QPushButton:disabled {background:#656565;color:#999;}')
         self.create_button.clicked.connect(lambda:window.safe(window.create))
-        grid.addWidget(self.create_button,2,1)
+        grid.addWidget(self.create_button,3,1)
         self.refresh()
     def refresh(self):
         for key,button in self.buttons.items():
@@ -128,6 +132,14 @@ class IntegratedWindow(QtWidgets.QDialog):
         layout.addLayout(root_row)
         self.diagram=Diagram(self);layout.addWidget(self.diagram,1)
         self.create_button=self.diagram.create_button
+        generic_row=QtWidgets.QHBoxLayout();self.generic_buttons={}
+        for key,label in (('object','载入通用物件'),('parent','载入物件根')):
+            button=PartButton(key,self);button.setText(label);self.generic_buttons[key]=button
+            button.setToolTip('左键载入单个物体；中键清空。通用物件待创建时，开始创建只追加此物件，不重复创建已载入部位。')
+            button.clicked.connect(lambda checked=False,k=key:self.safe(lambda:self.load_generic(k)))
+            button.unloaded.connect(self.clear_generic);generic_row.addWidget(button)
+        layout.addLayout(generic_row)
+        self.refresh_generic()
         self.add_global_options()
         master_button=QtWidgets.QPushButton('添加 / 选择总控制圆环',self)
         master_button.setToolTip('新建角色自动添加；已有角色可选中后添加。原点圆环统一移动和旋转角色，包含 IK 手腕与脚腕。')
@@ -143,6 +155,11 @@ class IntegratedWindow(QtWidgets.QDialog):
             from maya_agent.rigs.bip_retarget_ui import show_ui
             return show_ui()
         bip_button.clicked.connect(lambda:self.safe(open_bip));layout.addWidget(bip_button)
+        mobile_button=QtWidgets.QPushButton('手机工程 / 动画互通…',self)
+        def open_mobile():
+            from maya_agent.rigs.mobile_io import show_ui
+            return show_ui()
+        mobile_button.clicked.connect(lambda:self.safe(open_mobile));layout.addWidget(mobile_button)
         hint=QtWidgets.QLabel('新建自动添加原点总控制圆环，统一移动 / 旋转 IK 手脚。\n原有通用根保留；胸 / 腰用于部位跟随。')
         hint.setWordWrap(True)
         hint.setStyleSheet('color:#d0d0d0;font-size:12px;');layout.addWidget(hint)
@@ -186,6 +203,7 @@ class IntegratedWindow(QtWidgets.QDialog):
         self.diagram.refresh();self.message('已载入'+PARTS[key]['label']+'：'+str(len(names))+' 个目标。右键可检查顺序和动画设置。')
     def clear(self):
         for row in _state.values():row['targets']=[];row['uuids']=[];row['load_revision']=row.get('load_revision',0)+1
+        for key in _generic_state:self.clear_generic(key)
         self.clear_root()
         for key in _follow_state:self.clear_follow(key)
         self.diagram.refresh();self.message('已清空所有载入部位；场景不受影响。')
@@ -262,13 +280,16 @@ class IntegratedWindow(QtWidgets.QDialog):
         elif kind=='leg':
             from maya_agent.rigs.soft_leg.ui import LegRigWindow,WINDOW
             w=LegRigWindow(extra_options)
+        elif kind=='hand':
+            from maya_agent.rigs.fingers.ui import FingerWindow,WINDOW
+            w=FingerWindow()
         else:
             from .shoulder_ui import ShoulderWindow,WINDOW
             w=ShoulderWindow()
         if kind!='body':
             if kind in ('arm','leg'):c.checkBox(w.right_side,e=True,value=PARTS[key]['side']=='R',visible=False,manage=False)
             c.checkBox(w.drive_targets,e=True,value=opt.get('drive_targets',True))
-        if kind in ('shoulder','head'):c.floatFieldGrp(w.control_size,e=True,value1=opt.get('control_size',1.0))
+        if kind in ('shoulder','head','hand'):c.floatFieldGrp(w.control_size,e=True,value1=opt.get('control_size',1.0))
         c.window(WINDOW,e=True,title=PARTS[key]['label']+' · 详细设置')
         c.textFieldGrp(w.namespace,e=True,label='部位名称',text=opt['name'])
         self.sync_global_details(w)
@@ -291,7 +312,7 @@ class IntegratedWindow(QtWidgets.QDialog):
                        sample_step=c.floatFieldGrp(w.sample_step,q=True,value1=True))
             for option,field in fields.items():opt[option]=c.checkBox(field,q=True,value=True)
             if kind in ('arm','leg'):opt['live_alignment']=_global_options['live_alignment']
-            if kind in ('shoulder','head'):opt['control_size']=c.floatFieldGrp(w.control_size,q=True,value1=True)
+            if kind in ('shoulder','head','hand'):opt['control_size']=c.floatFieldGrp(w.control_size,q=True,value1=True)
             self.diagram.refresh();self.message(PARTS[key]['label']+'设置已保存。');c.deleteUI(WINDOW)
         c.button(w.create_button,e=True,label='保存部位设置（返回集成面板）',command=lambda *_:self.safe(save))
         c.button(label='清除此部位载入',parent=c.control(w.create_button,q=True,parent=True),
@@ -303,12 +324,51 @@ class IntegratedWindow(QtWidgets.QDialog):
         panel=build_selected();c.select(panel['root'],r=True)
         self.message('模式切换面板已就绪：选圆圈，W 左右拖动；左 0、右 1。')
         return panel
+    def load_generic(self,key):
+        names=c.ls(sl=True,l=True) or []
+        if len(names)!=1 or c.nodeType(names[0]) not in ('transform','joint'):raise ValueError('请只选择一个物体。')
+        _generic_state[key]=c.ls(names[0],uuid=True)[0];self.refresh_generic()
+        self.message('载入通用物件和物件根后，点击开始创建可追加单个物件；原角色部位不会重建。')
+    def clear_generic(self,key):
+        _generic_state[key]=None;self.refresh_generic()
+    def refresh_generic(self):
+        for key,label in (('object','载入通用物件'),('parent','载入物件根')):
+            names=c.ls(_generic_state[key],l=True) if _generic_state[key] else []
+            self.anchor_text(self.generic_buttons[key],label,names[0] if names else None)
+    def create_generic(self):
+        from .generic_objects import add
+        names={}
+        for key in ('object','parent'):
+            found=c.ls(_generic_state[key],l=True) if _generic_state[key] else []
+            if len(found)!=1:raise ValueError('请先分别载入一个通用物件和它的根物体。')
+            names[key]=found[0]
+        data=add(names['object'],names['parent'])
+        self.clear_generic('object')
+        self.message('通用'+str(data['number'])+'已创建；点击创建 / 显示模式切换面板刷新滑块。')
+        return data
     def create(self):
+        if _generic_state['object']:return self.create_generic()
         from . import build
         config={k:dict(row,targets=targets(k)) for k,row in _state.items() if row['uuids']}
         for key,row in config.items():
             row['copy_animation']=_global_options['copy_animation']
             if PARTS[key]['kind'] in ('arm','leg'):row['live_alignment']=_global_options['live_alignment']
+        hands={k:v for k,v in config.items() if k in ('hand_L','hand_R')}
+        if hands:
+            from maya_agent.rigs.fingers import character_for,append
+            import json
+            character=character_for(hands)
+            existing=json.loads(c.getAttr(character+'.integratedRigData')) if character else {}
+            def same_loaded_part(key):
+                mappings=existing.get('parts',{}).get(key,{}).get('original_target_mapping',[])
+                original=[c.ls(m['target'],uuid=True)[0] for m in mappings if c.objExists(m['target'])]
+                return original==[c.ls(n,uuid=True)[0] for n in config[key]['targets']]
+            # Old load buttons stay populated after creation. Recognize those
+            # exact originals when the user subsequently loads just a hand.
+            if character and all(same_loaded_part(k) for k in set(config)-set(hands)):
+                self.last_result=append(character,hands)
+                self.message('手指已追加到原角色并连接手腕；原手臂、腿部和身体未重建。')
+                return self.last_result
         self.create_button.setEnabled(False)
         c.undoInfo(openChunk=True,chunkName='CreateIntegratedRigWithPanel')
         try:

@@ -43,6 +43,7 @@ def build(rig):
     from . import live_alignment,live_layers
     outputs={};created=[]
     for key,part in rig['parts'].items():
+        if part.get('native_zero'):continue
         controls=dict(part['controls']);controls.update(part.get('live_controls',{}))
         group=c.createNode('transform',name=part['namespace']+':zero_controls',parent=part['root']);created.append(group)
         mapping={}

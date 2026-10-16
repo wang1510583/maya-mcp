@@ -12,7 +12,7 @@ ATTRIBUTE = 'characterMasterData'
 
 def _nodes(rig):
     import maya.cmds as c
-    result = [p['root'] for p in rig['parts'].values()]
+    result = [p['root'] for p in rig['parts'].values() if not p.get('follows_wrist')]
     external = rig.get('general_root')
     if not external and rig.get('space_root'):
         result.append(rig['space_root'])

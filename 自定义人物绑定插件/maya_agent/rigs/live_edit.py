@@ -240,6 +240,8 @@ if '_undo_payloads' not in globals():_undo_payloads={}
 def _fence(phase,snapshots):
     import uuid
     import maya.cmds as c
+    from .runtime_plugin import ensure_undo_command
+    ensure_undo_command()
     token=uuid.uuid4().hex
     _undo_payloads[token]=(phase,snapshots)
     try:c.mayaLiveEditState(token)
@@ -481,9 +483,8 @@ def install():
             for flag in ('preDragCommand','postDragCommand'):
                 for typ in ('transform','joint','nurbsCurve'):
                     mel.eval(command+' -edit -'+flag+' "" "'+typ+'" '+context+';')
-    from pathlib import Path
-    plugin=str(Path(__file__).with_name('maya_live_edit_undo.py'))
-    if not c.pluginInfo('maya_live_edit_undo.py',q=True,loaded=True):c.loadPlugin(plugin,quiet=True)
+    from .runtime_plugin import ensure_undo_command
+    ensure_undo_command()
     try:
         from PySide2 import QtCore,QtWidgets
         from shiboken2 import getCppPointer

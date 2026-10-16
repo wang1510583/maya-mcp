@@ -17,6 +17,9 @@ if '_pending' not in globals():_pending={}
 
 def _switch_module(root):
     import maya.cmds as c
+    if c.objExists(root+'.genericSpaceData'):
+        from .integrated import generic_objects
+        return generic_objects
     if c.objExists(root+'.chestSpaceData'):
         from . import chest_space
         return chest_space
@@ -38,7 +41,7 @@ def _switch_module(root):
 
 def _has_mode(root):
     import maya.cmds as c
-    return any(c.objExists(root+'.'+a) for a in ('armWorldIKData','footSpaceData','upperArmSpaceData','matchedSpaceData','bodyDriveData','chestSpaceData'))
+    return any(c.objExists(root+'.'+a) for a in ('armWorldIKData','footSpaceData','upperArmSpaceData','matchedSpaceData','bodyDriveData','chestSpaceData','genericSpaceData'))
 
 
 def _sync_mode_cache():
@@ -394,6 +397,7 @@ def install():
             _callbacks.pop(root,None)
     roots=(c.ls('*:rig_root',type='transform') or [])+(c.ls('*.upperArmSpaceData','*:*.upperArmSpaceData','*.matchedSpaceData','*:*.matchedSpaceData','*.bodyDriveData','*:*.bodyDriveData',objectsOnly=True) or [])
     roots+=c.ls('::*.chestSpaceData',objectsOnly=True) or []
+    roots+=c.ls('::*.genericSpaceData',objectsOnly=True) or []
     for root in dict.fromkeys(roots):
         if not _has_mode(root) or root in _callbacks:continue
         data=_switch_module(root)._data(root);node,attr=data['global_plug'].rsplit('.',1)

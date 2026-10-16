@@ -6,7 +6,7 @@ is only a transient mouse gesture, never an animation or rig driver.
 import json
 import math
 
-VERSION='1.3.0'
+VERSION='1.4.2'
 if '_callbacks' not in globals():_callbacks={}
 if '_pending' not in globals():_pending={}
 if '_busy' not in globals():_busy=False
@@ -35,6 +35,9 @@ def targets(rig):
             if owner and c.objExists(owner) and arm_ik._has_mode(owner):
                 data=arm_ik._switch_module(owner)._data(owner)
                 result[role]=dict(owner=owner,plug=data['global_plug'])
+    for row in rig.get('generic_objects',[]):
+        if c.objExists(row['owner']+'.genericSpaceData'):
+            result['generic_'+str(row['number'])]=dict(owner=row['owner'],plug=row['global_plug'])
     return result
 
 
@@ -52,9 +55,18 @@ def _paint(node,color,reference=False):
 
 
 def build(character):
+    import maya.cmds as c
+    c.undoInfo(openChunk=True,chunkName='CreateOrRefreshSwitchPanel')
+    try:return _build(character)
+    finally:c.undoInfo(closeChunk=True)
+
+
+def _build(character):
     """Create/reuse one panel for an integrated character without rebinding it."""
     import maya.cmds as c
     from . import arm_ik
+    from .integrated.generic_objects import upgrade_controls
+    upgrade_controls(character)
     rig=_read(character,'integratedRigData');entries=targets(rig)
     if not entries:raise ValueError('此角色尚未启用可切换的身体驱动或 global。')
     existing=c.listConnections(character+'.spaceSwitchPanel',s=True,d=False) if c.objExists(character+'.spaceSwitchPanel') else []
@@ -82,7 +94,7 @@ def build(character):
         # Character targets give a useful size even when mesh visibility is off.
         sources=[m['target'] for p in rig['parts'].values() for m in p.get('original_target_mapping',[]) if c.objExists(m['target'])]
         if not sources:sources=[n for p in rig['parts'].values() for n in p.get('joints',[]) if c.objExists(n)]
-        points=[c.xform(n,q=True,ws=True,t=True) for n in sources]
+        points=[c.xform(n,q=True,ws=True,t=True) for n in sources] or [[0,0,0]]
         lo=[min(p[i] for p in points) for i in range(3)];hi=[max(p[i] for p in points) for i in range(3)]
         height=max(hi[1]-lo[1],20);unit=height*.04
         c.xform(root,ws=True,t=(hi[0]+height*.09,lo[1]+height*.30,(lo[2]+hi[2])*.5))
@@ -169,6 +181,7 @@ def upgrade(root):
             c.xform(root,os=True,pivots=(6.2,15.8,0),preserve=True)
             data['master_control']=root;data['nodes'].append(shape)
         if not data.get('chest_row'):_add_chest_row(root,data)
+        _add_generic_rows(root,data)
         for handle in data['sliders'].values():_key_proxies(handle)
         data['version']=VERSION
         c.setAttr(root+'.spacePanelData',lock=False);c.setAttr(root+'.spacePanelData',json.dumps(data),type='string',lock=True)
@@ -223,6 +236,39 @@ def _add_chest_row(root,data):
     data['chest_row']=True
 
 
+def _add_generic_rows(root,data):
+    """Append missing rows, keeping existing sliders and their animation intact."""
+    import maya.cmds as c
+    try:from PySide2 import QtGui
+    except ImportError:from PySide6 import QtGui
+    entries=targets(_read(data['character'],'integratedRigData'));ns=root.rsplit(':',1)[0]
+    for key,source in entries.items():
+        if not key.startswith('generic_') or key in data['sliders']:continue
+        number=int(key.split('_')[1]);y=-1.2-2.2*number;nodes=data['nodes']
+        def curve(name,points,parent,reference=True):
+            n=c.curve(name=ns+':'+name,d=1,p=points);nodes.append(n)
+            c.parent(n,parent,r=True);_paint(n,(.92,.92,.92),reference);return n
+        font=QtGui.QFont('Microsoft YaHei');font.setPixelSize(100);font.setBold(True)
+        path=QtGui.QPainterPath();path.addText(0,0,font,'通用'+str(number));bounds=path.boundingRect();scale=min(.85/bounds.height(),3.5/bounds.width())
+        for i,poly in enumerate(path.toSubpathPolygons()):
+            points=[((p.x()-bounds.left())*scale,y-.4+(bounds.bottom()-p.y())*scale,0) for p in poly]
+            if len(points)>1:curve('switchLabel_'+key+'_'+str(i),points,root)
+        curve('switchTrack_'+key,[(4.1,y-.65,0),(8.8,y-.65,0),(8.8,y+.65,0),(4.1,y+.65,0),(4.1,y-.65,0)],root)
+        base=c.createNode('transform',name=ns+':switchBase_'+key,parent=root);nodes.append(base);c.setAttr(base+'.translate',4.65,y,0)
+        display=c.createNode('transform',name=ns+':switchDisplay_'+key,parent=base);nodes.append(display)
+        knob=curve('switch_'+key,[(.39*math.cos(a*math.pi/16),.39*math.sin(a*math.pi/16),.02) for a in range(33)],display,False)
+        for attr in ('ty','tz','rx','ry','rz','sx','sy','sz','v'):c.setAttr(knob+'.'+attr,lock=True,keyable=False)
+        c.transformLimits(knob,tx=(-3.6,3.6),etx=(True,True))
+        mul=c.createNode('multDoubleLinear',name=ns+':switchPosition_'+key);nodes.append(mul)
+        c.connectAttr(source['plug'],mul+'.input1');c.setAttr(mul+'.input2',3.6);c.connectAttr(mul+'.output',display+'.tx')
+        nodes.extend(_limits(knob,display,3.6))
+        c.addAttr(knob,ln='global',proxy=source['plug'],keyable=True)
+        c.addAttr(knob,ln='switchOwner',at='message');c.connectAttr(source['owner']+'.message',knob+'.switchOwner')
+        entry=dict(role=key,travel=3.6,display=display,owner=source['owner'],plug=source['plug'])
+        c.addAttr(knob,ln='spaceSliderData',dt='string');c.setAttr(knob+'.spaceSliderData',json.dumps(entry),type='string',lock=True)
+        data['sliders'][key]=knob
+
+
 def _key_proxies(handle):
     """Native S/setKeyframe routes to every editable animator channel.
 
@@ -235,6 +281,8 @@ def _key_proxies(handle):
     data=_read(handle,'spaceSliderData');owner=(c.listConnections(handle+'.switchOwner',s=True,d=False) or [data['owner']])[0]
     mode=arm_ik._switch_module(owner)._data(owner)
     control=mode.get('control') or mode.get('fk_wrist') or mode['controls'][0]
+    identity=mode.get('control_uuid') or mode.get('target_uuid')
+    if identity:control=(c.ls(identity,long=True) or [control])[0]
     from .zero_channels import surface
     control=surface(control)
     attrs=c.listAttr(control,keyable=True,unlocked=True,scalar=True) or []
@@ -255,8 +303,13 @@ def _key_proxies(handle):
         try:live_layers.curves_for_plug(source,registered)
         except ValueError:continue
         proxy=handle+'.control_'+attr
-        if not c.objExists(proxy):c.addAttr(handle,ln='control_'+attr,nn=c.attributeQuery(attr,node=control,niceName=True),proxy=source,keyable=True)
+        if mode.get('control_uuid') and c.objExists(proxy) and c.connectionInfo(proxy,sfd=True)!=source:
+            c.deleteAttr(proxy)
+        if not c.objExists(proxy):c.addAttr(handle,ln='control_'+attr,nn=c.attributeQuery(attr,node=control,niceName=True),proxy=source,keyable=True,hidden=attr.startswith('genericMatch'))
         proxies[proxy]=source
+    if mode.get('control_uuid'):
+        for stale in set(data.get('key_proxies',{}))-set(proxies):
+            if c.objExists(stale):c.deleteAttr(stale)
     c.setAttr(handle+'.tx',keyable=False,channelBox=False)
     data.update(key_control=control,key_proxies=proxies)
     c.setAttr(handle+'.spaceSliderData',lock=False);c.setAttr(handle+'.spaceSliderData',json.dumps(data),type='string',lock=True)

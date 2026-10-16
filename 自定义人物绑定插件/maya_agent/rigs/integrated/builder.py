@@ -21,11 +21,21 @@ def preflight(parts):
         if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',options.get('name',key)):
             raise ValueError(part['label']+'的部位名称无效。')
         if copy and not options.get('drive_targets',True):raise ValueError(part['label']+'拷贝动画需要启用驱动目标。')
-        if part['kind'] in ('shoulder','head'):
+        if part['kind'] in ('shoulder','head','hand'):
             size=options.get('control_size',1.0)
             if not isinstance(size,(int,float)) or not math.isfinite(size) or size<=0:raise ValueError(part['label']+'控制器大小必须大于零。')
-        samples,_=inspect(names,allow_animation=copy,minimum_count=1 if part['kind']=='shoulder' else 2,
-                          allow_parent_drivers=True)
+        topology=None
+        if part['kind']=='hand':
+            from maya_agent.rigs.fingers import inspect_selection
+            topology=inspect_selection(names)
+            samples=[]
+            for name in names:
+                if not copy and any(c.connectionInfo(name+'.'+a,sfd=True) for a in ('tx','ty','tz','rx','ry','rz')):
+                    raise ValueError('手指已有动画或驱动；请明确启用拷贝动画。')
+                row,_=inspect([name],allow_animation=True,minimum_count=1,allow_parent_drivers=True)
+                samples.extend(row)
+        else:
+            samples,_=inspect(names,allow_animation=copy,minimum_count=1 if part['kind']=='shoulder' else 2,allow_parent_drivers=True)
         for sample in samples:
             if sample['node'] in seen:raise ValueError('同一目标不能载入多个部位：'+sample['node'])
             seen.add(sample['node'])
@@ -33,7 +43,8 @@ def preflight(parts):
                            options.get('end_frame',c.playbackOptions(q=True,maxTime=True)),options.get('sample_step',1)) if copy else []
         data[key]=dict(options=options,samples=samples,frames=frames,motion={})
         from maya_agent.rigs.controller_shapes import measure
-        data[key]['appearance_metrics']=measure(key,[s['node'] for s in samples])
+        if topology:data[key].update(topology=topology,wrist_motion={})
+        else:data[key]['appearance_metrics']=measure(key,[s['node'] for s in samples])
         if part['kind']=='leg':
             from maya_agent.rigs.soft_leg.foot_placement import from_targets
             data[key]['pivot_placement']=from_targets(samples[2]['node'],samples[3]['node'])
@@ -63,6 +74,7 @@ def capture(data,general_root=None):
                     poses.append(dict(matrix=matrix,rotation=list(tm.rotation(asQuaternion=True).asMatrix()),
                                       pivot=c.xform(sample['node'],q=True,ws=True,rp=True)))
                 item['motion'][frame]=poses
+                if 'topology' in item:item['wrist_motion'][frame]=c.xform(item['topology']['wrist'],q=True,ws=True,m=True)
     finally:c.currentTime(current)
     return root_motion
 
@@ -113,6 +125,9 @@ def proxies(item,namespace,group,key):
 
 def create_part(key,item,targets,namespace,chest=None):
     part=PARTS[key];opt=item['options']
+    if part['kind']=='hand':
+        from maya_agent.rigs.fingers import build
+        return build(item,targets,namespace,part['side'])
     if part['kind']=='head':
         from maya_agent.rigs.head_neck import build
         return build(item,targets,namespace,chest=chest)
@@ -166,8 +181,10 @@ def validate_follow(node,data,label):
     return node
 
 
-def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,hips_follow=None,zero_controls=False):
+def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,hips_follow=None,zero_controls=False,create_master=True):
     import maya.cmds as c
+    from maya_agent.rigs.runtime_plugin import ensure_undo_command
+    ensure_undo_command()
     from maya_agent.rigs.custom_body.animation import Transfer
     from maya_agent.rigs.custom_body.targets import restore
     from maya_agent.rigs.soft_leg import cleanup
@@ -198,7 +215,7 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
         root=c.createNode('transform',name=namespace+':character_rig')
         output=c.createNode('transform',name=namespace+':outputs',parent=root);c.setAttr(output+'.visibility',False)
         external_reference=root_reference(namespace,root,root_motion,any(item['frames'] for item in data.values())) if general_root else None
-        for key in ['body','head','shoulder_R','shoulder_L','arm_R','arm_L','leg_R','leg_L']:
+        for key in ['body','head','shoulder_R','shoulder_L','arm_R','arm_L','leg_R','leg_L','hand_R','hand_L']:
             if key not in data:continue
             item=data[key];item['proxies']=proxies(item,namespace,output,key)
             part_ns=namespace+'_'+item['options'].get('name',key)
@@ -216,7 +233,7 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
         for key,rig in built.items():
             rig['connected']=False
             rig['general_root_connected']=bool(general_root)
-            if not general_root:continue
+            if not general_root or rig.get('follows_wrist'):continue
             group=c.createNode('transform',name=namespace+':'+key+'_attachment',parent=general_root)
             if external_reference and data[key]['frames']:
                 c.connectAttr(external_reference+'.worldInverseMatrix[0]',group+'.offsetParentMatrix')
@@ -313,7 +330,7 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
             from maya_agent.rigs.custom_body.continuous_rotation import enable as enable_continuous_rotation
             enable_continuous_rotation(built['body'], sample_frames=data['body']['frames'])
         from .master_control import attach as attach_master_control
-        attach_master_control(result)
+        if create_master:attach_master_control(result)
         c.addAttr(root,ln='integratedRigData',dt='string')
         c.setAttr(root+'.integratedRigData',json.dumps(result,ensure_ascii=False),type='string',lock=True)
         return result

@@ -27,7 +27,8 @@ def activate():
     for name in sorted(names, key=lambda value: (-value.count('.'), value)):
         importlib.reload(sys.modules[name])
     for name in ('maya_agent.rigs.custom_body.definition', 'maya_agent.rigs.custom_body.builder',
-                 'maya_agent.rigs.custom_body', 'maya_agent.rigs.integrated.builder', 'maya_agent.rigs.integrated'):
+                 'maya_agent.rigs.custom_body', 'maya_agent.rigs.integrated',
+                 'maya_agent.rigs.integrated.builder', 'maya_agent.rigs.integrated.ui'):
         importlib.reload(importlib.import_module(name))
     return ROOT
 
