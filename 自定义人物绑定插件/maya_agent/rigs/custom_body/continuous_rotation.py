@@ -6,6 +6,10 @@ VERSION = '1.0.0'
 ATTRIBUTE = 'continuousBodyRotationData'
 
 
+class PoseMismatchError(ValueError):
+    """Candidate was rolled back because it differs from the original solve."""
+
+
 def candidate(rig, preserve_current_branch=True):
     import maya.cmds as cmds
     import maya.api.OpenMaya as om
@@ -115,7 +119,7 @@ def enable(rig, sample_frames=None):
                 error = math.degrees(2 * math.acos(min(1, abs((quaternions[0] * quaternions[1].inverse()).w))))
                 largest = max(largest, error)
                 if error > 0.0001:
-                    raise ValueError('连续旋转升级会改变已有姿态，已取消：%s，帧 %s，误差 %.6f 度' % (row['role'], sample, error))
+                    raise PoseMismatchError('连续旋转升级会改变已有姿态，已取消：%s，帧 %s，误差 %.6f 度' % (row['role'], sample, error))
         cmds.currentTime(frame)
         for row in data['outputs']:
             for destination in cmds.listConnections(row['original'], source=False, destination=True, plugs=True) or []:
@@ -126,7 +130,7 @@ def enable(rig, sample_frames=None):
         pose_error = max(abs(first - second) for node, matrix in before.items()
                          for first, second in zip(matrix, cmds.xform(node, query=True, worldSpace=True, matrix=True)))
         if pose_error > 0.0001:
-            raise ValueError('连续旋转升级未保留姿态：%s' % pose_error)
+            raise PoseMismatchError('连续旋转升级未保留姿态：%s' % pose_error)
         data.update(version=VERSION, replaced=replaced, max_rotation_error=largest, max_pose_error=pose_error)
         cmds.addAttr(owner, longName=ATTRIBUTE, dataType='string')
         cmds.setAttr(owner + '.' + ATTRIBUTE, json.dumps(data), type='string')

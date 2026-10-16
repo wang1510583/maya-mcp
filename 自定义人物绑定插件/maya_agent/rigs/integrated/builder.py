@@ -6,6 +6,20 @@ from types import SimpleNamespace
 from . import PARTS,VERSION
 
 
+def pose_preserving_euler(rotation,previous):
+    """Keep Euler continuity only when the resulting orientation is equivalent.
+
+    Maya closestSolution can change orientation when the previous pose is near
+    gimbal lock and the next blocking pose is far away from that singularity.
+    """
+    if previous is None:return rotation
+    matrix=list(rotation.asMatrix())
+    for candidate in (rotation.closestSolution(previous),rotation.closestCut(previous)):
+        if max(abs(a-b) for a,b in zip(matrix,list(candidate.asMatrix())))<1e-10:
+            return candidate
+    return rotation
+
+
 def preflight(parts):
     import maya.cmds as c
     from maya_agent.rigs.custom_body.targets import inspect
@@ -87,7 +101,7 @@ def root_reference(namespace,parent,motion,animated,name='general_root_reference
     previous=None
     for frame,matrix in sorted(motion.items()):
         tm=om.MTransformationMatrix(om.MMatrix(matrix));rotation=tm.rotation(asQuaternion=True).asEulerRotation()
-        if previous is not None:rotation=rotation.closestSolution(previous)
+        rotation=pose_preserving_euler(rotation,previous)
         previous=rotation
         scale=tm.scale(om.MSpace.kWorld)
         if min(scale)<=0 or max(scale)-min(scale)>1e-5 or max(abs(v) for v in tm.shear(om.MSpace.kWorld))>1e-5:
@@ -113,12 +127,18 @@ def proxies(item,namespace,group,key):
         for f in sorted(item['motion']):
             for node,pose in zip(nodes,item['motion'][f]):
                 euler=om.MTransformationMatrix(om.MMatrix(pose['rotation'])).rotation(asQuaternion=True).asEulerRotation()
-                if node in previous:euler=euler.closestSolution(previous[node])
+                euler=pose_preserving_euler(euler,previous.get(node))
                 previous[node]=euler
                 values=pose['pivot']+[math.degrees(v) for v in euler]
                 for a,v in zip(('translateX','translateY','translateZ','rotateX','rotateY','rotateZ'),values):
                     c.setKeyframe(node,at=a,t=f,v=v,itt='linear',ott='linear')
                 c.dgdirty(node)
+        # Maya can create these curves in the current (root) namespace. Parts
+        # detach them later; keep ownership so a rejected build cleans them too.
+        for node in nodes:
+            for curve in set(c.listConnections(node,s=True,d=False,type='animCurve') or []):
+                if not curve.startswith(namespace+':'):
+                    c.rename(curve,namespace+':'+curve.rsplit(':',1)[-1])
         c.currentTime(current)
     return nodes
 
@@ -181,7 +201,9 @@ def validate_follow(node,data,label):
     return node
 
 
-def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,hips_follow=None,zero_controls=False,create_master=True):
+def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,hips_follow=None,zero_controls=False,create_master=True,pose_tolerance=1e-4):
+    if isinstance(pose_tolerance,bool) or not isinstance(pose_tolerance,(int,float)) or not math.isfinite(pose_tolerance) or not 1e-8<=pose_tolerance<=1:
+        raise ValueError('核对容差必须是 0.00000001 到 1 之间的有限数值。')
     import maya.cmds as c
     from maya_agent.rigs.runtime_plugin import ensure_undo_command
     ensure_undo_command()
@@ -275,11 +297,12 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
                 for sample,pose in zip(item['samples'],item['motion'][f]):
                     delta=max(abs(a-b) for a,b in zip(c.xform(sample['node'],q=True,ws=True,m=True),pose['matrix']))
                     error=max(error,delta)
-                    if delta>1e-4:raise RuntimeError('{}动画/姿态核对失败，帧 {}，误差 {}'.format(PARTS[key]['label'],f,delta))
+                    if delta>pose_tolerance:raise RuntimeError('{}动画/姿态核对失败，帧 {}，误差 {}，容差 {}'.format(PARTS[key]['label'],f,delta,pose_tolerance))
         result=dict(root=root,namespace=namespace,version=VERSION,parts=built,max_world_error=error,
                     skipped=[k for k in PARTS if k not in built],reference_body=reference,
                     original_animation_backups=[t.backup for t in transfers],spaces=spaces,space_root=space_root,hierarchy=hierarchy)
         result['general_root']=general_root
+        result['pose_tolerance']=pose_tolerance
         result['external_follow']=dict(chest=chest_follow,hips=hips_follow)
         from .display import apply as organize_display
         result['display']=organize_display(result)
@@ -324,13 +347,33 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
                     if f not in item['motion'] or not item['options'].get('drive_targets',True):continue
                     for sample,pose in zip(item['samples'],item['motion'][f]):
                         delta=max(abs(a-b) for a,b in zip(c.xform(sample['node'],q=True,ws=True,m=True),pose['matrix']))
-                        if delta>1e-4:raise RuntimeError('零位控制器未保留动画，帧 %s：%s'%(f,delta))
+                        result['max_world_error']=max(result['max_world_error'],delta)
+                        if delta>pose_tolerance:raise RuntimeError('零位控制器未保留动画，帧 %s：%s，容差 %s'%(f,delta,pose_tolerance))
             c.currentTime(frame)
         if 'body' in built:
-            from maya_agent.rigs.custom_body.continuous_rotation import enable as enable_continuous_rotation
-            enable_continuous_rotation(built['body'], sample_frames=data['body']['frames'])
+            from maya_agent.rigs.custom_body.continuous_rotation import enable as enable_continuous_rotation,PoseMismatchError
+            try:
+                enable_continuous_rotation(built['body'], sample_frames=data['body']['frames'])
+            except PoseMismatchError as exc:
+                if not data['body']['frames']:raise
+                # The optional upgrade restores the original graph before
+                # raising. Keep the already-baked animation and its original
+                # solve; never accept the mismatched candidate or mask errors.
+                result['continuous_rotation_fallback']=dict(mode='original_solver',reason=str(exc))
         from .master_control import attach as attach_master_control
         if create_master:attach_master_control(result)
+        # Verify the delivered graph, including the retained original solve,
+        # all sampled poses, and the current pose after all optional upgrades.
+        for f in sorted({frame}|{f for item in data.values() for f in item['frames']}):
+            c.currentTime(f)
+            for key,item in data.items():
+                if f not in item['motion'] or not item['options'].get('drive_targets',True):continue
+                for sample,pose in zip(item['samples'],item['motion'][f]):
+                    delta=max(abs(a-b) for a,b in zip(c.xform(sample['node'],q=True,ws=True,m=True),pose['matrix']))
+                    if not math.isfinite(delta) or delta>pose_tolerance:
+                        raise RuntimeError('{}最终动画核对失败，帧 {}，误差 {}，容差 {}'.format(PARTS[key]['label'],f,delta,pose_tolerance))
+                    result['max_world_error']=max(result['max_world_error'],delta)
+        c.currentTime(frame)
         c.addAttr(root,ln='integratedRigData',dt='string')
         c.setAttr(root+'.integratedRigData',json.dumps(result,ensure_ascii=False),type='string',lock=True)
         return result

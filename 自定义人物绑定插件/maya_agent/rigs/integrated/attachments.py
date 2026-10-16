@@ -25,13 +25,20 @@ def point_link(rig,item,assembly_root,control=None,locator=None,label='shoulder'
             plug=matrix+'.matrixSum'
         decompose=c.createNode('decomposeMatrix',name=ns+':'+name+'_pointPosition')
         c.connectAttr(plug,decompose+'.inputMatrix');positions.append(decompose+'.outputTranslate')
-    delta=c.createNode('plusMinusAverage',name=ns+':shoulder_pointDelta');c.setAttr(delta+'.operation',2)
-    c.connectAttr(positions[0],delta+'.input3D[0]');c.connectAttr(positions[2],delta+'.input3D[1]')
-    total=c.createNode('plusMinusAverage',name=ns+':shoulder_pointGoal')
-    c.connectAttr(delta+'.output3D',total+'.input3D[0]');c.connectAttr(positions[1],total+'.input3D[1]')
     goal=c.createNode('transform',name=ns+':shoulder_pointDriver',parent=assembly_root)
     c.setAttr(goal+'.inheritsTransform',False);c.setAttr(goal+'.visibility',False)
-    c.connectAttr(total+'.output3D',goal+'.translate')
+    # plusMinusAverage.input3D/output3D are float3. Quantizing even the base
+    # position by <1e-6 cm can move a nearly straight IK knee by >1e-4 cm.
+    # Keep live - reference + base in double precision, before the IK solve.
+    # This changes neither the reference trajectory nor the output offsets.
+    for axis in 'XYZ':
+        negative=c.createNode('multDoubleLinear',name=ns+':shoulder_pointNegative'+axis)
+        c.connectAttr(positions[2]+axis,negative+'.input1');c.setAttr(negative+'.input2',-1)
+        delta=c.createNode('addDoubleLinear',name=ns+':shoulder_pointDelta'+axis)
+        c.connectAttr(positions[0]+axis,delta+'.input1');c.connectAttr(negative+'.output',delta+'.input2')
+        total=c.createNode('addDoubleLinear',name=ns+':shoulder_pointGoal'+axis)
+        c.connectAttr(delta+'.output',total+'.input1');c.connectAttr(positions[1]+axis,total+'.input2')
+        c.connectAttr(total+'.output',goal+'.translate'+axis)
     parent=c.listRelatives(ctrl,p=True,fullPath=True)[0]
     group=c.createNode('transform',name=ns+':shoulder_pointOffset',parent=parent)
     c.parent(ctrl,group,relative=True)

@@ -1,5 +1,5 @@
 {
-  "integrated_version": "1.26.6",
+  "integrated_version": "1.26.12",
   "body_version": "1.4.6",
   "files": [
     {
@@ -99,8 +99,8 @@
     },
     {
       "path": "maya_agent/rigs/body_direction.py",
-      "bytes": 9367,
-      "sha256": "1acbbe99be5a0ec836ec749e8906c0abfda43eb7543c02e7a33d8ba0436dc71a"
+      "bytes": 9527,
+      "sha256": "7f766c138ce0c2346c6ec97a640e1a6070e677285e64f1f31f0b6730f9050921"
     },
     {
       "path": "maya_agent/rigs/body_direction_match.py",
@@ -159,8 +159,8 @@
     },
     {
       "path": "maya_agent/rigs/custom_body/continuous_rotation.py",
-      "bytes": 8303,
-      "sha256": "cf995a4c2ba47d0871e574d0a6091013d1ec938ea882b845642c385379a79075"
+      "bytes": 8436,
+      "sha256": "73fb29cac91bf6b7577a706005ead28b91056780585c50bb12636b50c6152f10"
     },
     {
       "path": "maya_agent/rigs/custom_body/controls.py",
@@ -229,8 +229,8 @@
     },
     {
       "path": "maya_agent/rigs/custom_body/README.md",
-      "bytes": 17123,
-      "sha256": "20350684ca63df9ec7e81b9352e43bd10555b6b62df108d543476bd5e2d870d5"
+      "bytes": 17775,
+      "sha256": "affc5485458569b4f614abb0aa4c8ff302e4134d828e764b78d287406ca12bad"
     },
     {
       "path": "maya_agent/rigs/custom_body/skeleton.py",
@@ -294,23 +294,28 @@
     },
     {
       "path": "maya_agent/rigs/integrated/__init__.py",
-      "bytes": 1269,
-      "sha256": "1b800c3b50f1be8b34fe1cabace8294d5db5b3607ac4d9cf6fd52fb791bc430f"
+      "bytes": 1320,
+      "sha256": "b6cf9a2633f5b52b2e09485437715b217ca2ffab94c922f24fe87b8f88313289"
     },
     {
       "path": "maya_agent/rigs/integrated/attachments.py",
-      "bytes": 3676,
-      "sha256": "6a2485fd068ea43f1c4ae2b73b581bdb1eff665ed72d00b499ae79220e6369e6"
+      "bytes": 4183,
+      "sha256": "72fcfd3c7ce5ab8f3b36312015f346f6945e2ce2d1fe6d16865510535d9616ba"
     },
     {
       "path": "maya_agent/rigs/integrated/builder.py",
-      "bytes": 21535,
-      "sha256": "f8acbcb8bb619563dc0068117a5a8aee7969bf8f3594cf2bbff4c63ab1a180ef"
+      "bytes": 24441,
+      "sha256": "3906350404eaed75ca231130ef1f4d1c7738ba7590138eba79b49da0e0bda5bc"
     },
     {
       "path": "maya_agent/rigs/integrated/display.py",
       "bytes": 3139,
       "sha256": "b367789bc610a0c80c210f6c171ff603d3d5ba91934fc8ba5f00095218f79576"
+    },
+    {
+      "path": "maya_agent/rigs/integrated/generic_animation.py",
+      "bytes": 9776,
+      "sha256": "e5c273eb9aaad7f7329e8844a609f3937fec2fc4fed63575ced2fe220c469b0a"
     },
     {
       "path": "maya_agent/rigs/integrated/generic_hierarchy.py",
@@ -324,8 +329,13 @@
     },
     {
       "path": "maya_agent/rigs/integrated/generic_objects.py",
-      "bytes": 20326,
-      "sha256": "384586eaa935b1bd00f03384865a8398d169a28040db3b128ce31f1b9234a0f9"
+      "bytes": 21750,
+      "sha256": "94ca2880eac7a4679533b5b3082533f0e26521aea69cb0708e83d4f1d6c1b33a"
+    },
+    {
+      "path": "maya_agent/rigs/integrated/generic_rebuild.py",
+      "bytes": 9723,
+      "sha256": "7b2bbc4176745209b03ef1beeb2bf6e6a4676e777fa78d55c194f7029e3ee49c"
     },
     {
       "path": "maya_agent/rigs/integrated/hierarchy.py",
@@ -339,8 +349,8 @@
     },
     {
       "path": "maya_agent/rigs/integrated/README.md",
-      "bytes": 56708,
-      "sha256": "f3364ec12576d0aad081d71966b402ac329ad665f13f1dbab9102e1929f6b83e"
+      "bytes": 61825,
+      "sha256": "008ab8137ea1b0df89449228f5f94c1611775c890b443dba8d4e4e627c0fcf9e"
     },
     {
       "path": "maya_agent/rigs/integrated/shoulder.py",
@@ -359,8 +369,8 @@
     },
     {
       "path": "maya_agent/rigs/integrated/ui.py",
-      "bytes": 26386,
-      "sha256": "1b353f6859961f0d502c7ef32a701f28dba6642a44068c6ea9c678f6ccee4e9b"
+      "bytes": 27886,
+      "sha256": "de109e4a7f0e3a67903b76008684b88a3fac5cec19a4045ce893167a00f88149"
     },
     {
       "path": "maya_agent/rigs/live_alignment.py",
@@ -408,9 +418,14 @@
       "sha256": "eb276036950e235b9803749c01b559dfa7cbdacc6b6bed29f681948d9f2f1e5d"
     },
     {
+      "path": "maya_agent/rigs/mobile_io/backend/animation_curves.py",
+      "bytes": 8273,
+      "sha256": "d62a44f060f91b0cb03fca5b6db635c0556c5f46e2bed6e1580136a39d287b12"
+    },
+    {
       "path": "maya_agent/rigs/mobile_io/backend/export_animation.py",
-      "bytes": 5852,
-      "sha256": "7e5dad7edffd47f8c52bf0a075e2df17c064aefdeefa07be7c4ae9022154b2d8"
+      "bytes": 5953,
+      "sha256": "cab9b214b6b4f998570a2c018d1a2925c6bfd88706339514074dccc8277777c6"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_mesh_shading.py",
@@ -434,33 +449,33 @@
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/mobile_animation_io.py",
-      "bytes": 11932,
-      "sha256": "401d60268d51c3daef242d6a11d164b4dc7c2928bb7e582cf96c0e05f01567ef"
+      "bytes": 13350,
+      "sha256": "41d7b0fd96d8d687269b40151cb4107173cdb5fa028cd85eede61e682b5c1fad"
     },
     {
       "path": "maya_agent/rigs/mobile_io/README.md",
-      "bytes": 3186,
-      "sha256": "42d33887faabfcce394715d1155552e0bdccdba662cf50018d413afb680c5b13"
+      "bytes": 4559,
+      "sha256": "7e283d45ae39e7bd15b4b97d576ae1c6403f68ba340f746dcc5485841b02aef7"
     },
     {
       "path": "maya_agent/rigs/mobile_io/server/maya_mobile_exchange_server.py",
-      "bytes": 6586,
-      "sha256": "8eaefebe7b752b84ca04b57b97ffee0ff27dbc02ca5c05b88434d4fe7e44ce6b"
+      "bytes": 7802,
+      "sha256": "ca90d843067163072d6b9f3ab32302ff688e33838f4bfdd446780d1892e4e41e"
     },
     {
       "path": "maya_agent/rigs/mobile_io/server/README.md",
-      "bytes": 794,
-      "sha256": "24f6d8366eacca7436b25349872105d81703c0388fb9dc129a237da569c682b8"
+      "bytes": 1277,
+      "sha256": "312f84aa55419e4ea91dd015b297759460c04e438f7d558806aff7acfbeeb76e"
     },
     {
       "path": "maya_agent/rigs/mobile_io/service.py",
-      "bytes": 8179,
-      "sha256": "20f0cddb46980aa0fcd6926345c760f3fc18d0e72b5f54e333eb8ff2512bc98d"
+      "bytes": 12482,
+      "sha256": "716fe11d2939ec3ce22db06e33ea3f4af630dba87a2691c8c66156534e96487d"
     },
     {
       "path": "maya_agent/rigs/mobile_io/ui.py",
-      "bytes": 17255,
-      "sha256": "4b142721457f4b55d2fb961c907a0db42b24ac68cbaa7d1d785e7cb97afe33fb"
+      "bytes": 16310,
+      "sha256": "9f4eb2ce5b7e391d6dd65d2bb58f18a8dce5afe227605a911488b36924f360b6"
     },
     {
       "path": "maya_agent/rigs/runtime_plugin.py",

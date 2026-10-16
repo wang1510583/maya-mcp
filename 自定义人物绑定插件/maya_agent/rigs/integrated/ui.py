@@ -7,6 +7,7 @@ _instance=globals().get('_instance')
 _root_state=globals().get('_root_state',dict(uuid=None,name=None))
 _follow_state=globals().get('_follow_state',{key:dict(uuid=None,name=None) for key in ('chest','hips')})
 _global_options=globals().get('_global_options',dict(copy_animation=True,live_alignment=True))
+_global_options.setdefault('pose_tolerance',1e-4)
 _generic_state=globals().get('_generic_state',{'object':None,'parent':None})
 FOLLOW_LABELS={'chest':'胸部跟随对象','hips':'腰部跟随对象'}
 _state=globals().get('_state',{key:dict(targets=[],uuids=[],connected=False,name=key,drive_targets=True,
@@ -181,6 +182,17 @@ class IntegratedWindow(QtWidgets.QDialog):
             self.global_checkboxes[option]=checkbox;options_row.addWidget(checkbox)
         options_row.addStretch()
         self.layout().insertLayout(self.layout().indexOf(self.diagram)+1,options_row)
+        tolerance_row=QtWidgets.QHBoxLayout();tolerance_row.addWidget(QtWidgets.QLabel('核对容差'))
+        self.pose_tolerance=QtWidgets.QDoubleSpinBox(self)
+        self.pose_tolerance.setDecimals(8);self.pose_tolerance.setRange(1e-8,1.0)
+        self.pose_tolerance.setSingleStep(.0001);self.pose_tolerance.setKeyboardTracking(False)
+        self.pose_tolerance.setValue(_global_options['pose_tolerance'])
+        self.pose_tolerance.setToolTip('默认 0.0001。用于集成装配及零位控制器的最终世界矩阵误差核对，数值不是厘米。\n调大只允许更大偏差，不修正求解；部位内部 IK、输入和动画保护检查仍保留。')
+        self.pose_tolerance.valueChanged.connect(lambda value:_global_options.update(pose_tolerance=value))
+        tolerance_row.addWidget(self.pose_tolerance,1)
+        reset=QtWidgets.QPushButton('恢复默认',self);reset.clicked.connect(lambda:self.pose_tolerance.setValue(1e-4))
+        tolerance_row.addWidget(reset)
+        self.layout().insertLayout(self.layout().indexOf(self.diagram)+2,tolerance_row)
     def set_global_option(self,option,value):
         _global_options[option]=bool(value)
         for key,row in _state.items():
@@ -344,7 +356,7 @@ class IntegratedWindow(QtWidgets.QDialog):
             names[key]=found[0]
         data=add(names['object'],names['parent'])
         self.clear_generic('object')
-        self.message('通用'+str(data['number'])+'已创建；点击创建 / 显示模式切换面板刷新滑块。')
+        self.message(('已清理失去控制器的旧绑定并重建；' if data.get('recreated') else '')+'通用'+str(data['number'])+'已创建；点击创建 / 显示模式切换面板刷新滑块。')
         return data
     def create(self):
         if _generic_state['object']:return self.create_generic()
@@ -380,10 +392,13 @@ class IntegratedWindow(QtWidgets.QDialog):
             chest=self.follow_target('chest') if 'body' not in config else None
             hips=self.follow_target('hips') if 'body' not in config else None
             self.last_result=build(config,namespace=self.namespace.text().strip(),general_root=root,
-                                   chest_follow=chest,hips_follow=hips,zero_controls=True)
+                                   chest_follow=chest,hips_follow=hips,zero_controls=True,pose_tolerance=self.pose_tolerance.value())
             from maya_agent.rigs.switch_panel import build as build_switch_panel,targets as panel_targets
             if panel_targets(self.last_result):build_switch_panel(self.last_result['root'])
-            self.message('已创建 '+str(len(self.last_result['parts']))+' 个部位，已按参考结构连接控制器和部位起点。 Ctrl+Z 可整体撤销。')
+            message='已创建 '+str(len(self.last_result['parts']))+' 个部位，已按参考结构连接控制器和部位起点。 Ctrl+Z 可整体撤销。'
+            if self.last_result.get('continuous_rotation_fallback'):
+                message+=' 已保留原身体求解并拷贝动画；连续旋转升级与原姿态不一致，未启用。'
+            self.message(message)
             return self.last_result
         finally:
             self.create_button.setEnabled(True);c.undoInfo(closeChunk=True)

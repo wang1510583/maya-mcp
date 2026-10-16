@@ -10,3 +10,5 @@ python3 maya_mobile_exchange_server.py --host :: --port 8765
 共享目录固定默认为 `/home/wangjiafeng/电脑maya和安卓maya互通文件`，也可以用 `--root` 覆盖。Maya 电脑端填写 Linux 主机的 Tailscale MagicDNS 主机名 `http://wang.tail26a65a.ts.net:8765`；手机端使用 Caddy 提供的固定 HTTPS 反代地址 `https://lempet.top:9000/maya-mobile`，由该路径转发到本服务的 `127.0.0.1:8765`。服务本身仍保留 Tailscale 监听，方便 Maya 电脑直连。仅在可信网络使用 HTTP；公网入口应使用 HTTPS 并在服务器防火墙只放行所需端口。
 
 服务只接受带 `X-Exchange-Token` 的请求，并只暴露 `.json` / `.mobile.json` 文件；上传采用临时文件加原子替换，不会留下半个文件。
+
+新增 `DELETE /api/files/<URL编码文件名>`：必须携带 `X-Exchange-Token` 和 `If-Match`（列表返回的 sha256）。仅删除该普通文件，不级联删除对应动画；过期校验返回 409，缺少校验返回 428，文件不存在返回 404。安卓会先显示确认窗口，取消不发送请求。

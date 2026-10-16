@@ -1,5 +1,5 @@
 """Selection-driven character assembly of the custom body, arm and leg modules."""
-VERSION='1.26.6'
+VERSION='1.26.12'
 PARTS={
     'hand_R':dict(label='右手指',kind='hand',side='R',count=None),
     'hand_L':dict(label='左手指',kind='hand',side='L',count=None),
@@ -14,9 +14,9 @@ PARTS={
 }
 
 
-def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,hips_follow=None,zero_controls=False):
+def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,hips_follow=None,zero_controls=False,pose_tolerance=1e-4):
     from .builder import build as create
-    return create(parts,namespace,general_root=general_root,chest_follow=chest_follow,hips_follow=hips_follow,zero_controls=zero_controls)
+    return create(parts,namespace,general_root=general_root,chest_follow=chest_follow,hips_follow=hips_follow,zero_controls=zero_controls,pose_tolerance=pose_tolerance)
 
 
 def show_ui():

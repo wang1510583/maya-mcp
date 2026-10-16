@@ -4,7 +4,7 @@
 It deliberately exposes only JSON/mobile project files from one directory.
 Use HTTPS (or Tailscale) when the phone is outside the trusted LAN.
 """
-import argparse, hashlib, json, os, re, tempfile
+import argparse, hashlib, json, os, re, tempfile, threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -36,6 +36,7 @@ def metadata(path):
 
 def make_handler(root, token):
     root = Path(root).expanduser().resolve(); root.mkdir(parents=True, exist_ok=True)
+    file_lock = threading.RLock()
     class Handler(BaseHTTPRequestHandler):
         server_version = "MayaMobileExchange/1.0"
         def log_message(self, fmt, *args):
@@ -85,12 +86,27 @@ def make_handler(root, token):
                             block=self.rfile.read(min(1024*1024,remaining))
                             if not block: raise IOError("上传提前结束")
                             out.write(block); remaining-=len(block)
-                    os.replace(tmp,p)
+                    with file_lock: os.replace(tmp,p)
                 finally:
                     if os.path.exists(tmp): os.unlink(tmp)
                 self.send_json(200,{"ok":True,"name":p.name,"size":p.stat().st_size,"sha256":sha256(p)})
             except (ValueError,IOError) as e: self.fail(400,str(e))
             except Exception as e: self.fail(500,str(e))
+        def do_DELETE(self):
+            if not self.auth(): return self.fail(401, "令牌错误")
+            try:
+                if not urlparse(self.path).path.startswith("/api/files/"): return self.fail(404, "接口不存在")
+                p = root / self.name()
+                with file_lock:
+                    if p.is_symlink() or p.resolve().parent != root: return self.fail(400, "不能删除链接或目录外文件")
+                    if not p.is_file(): return self.fail(404, "文件不存在，请刷新列表")
+                    expected = self.headers.get("If-Match", "").strip('"')
+                    if not expected: return self.fail(428, "缺少文件校验值，请刷新列表")
+                    if expected != sha256(p): return self.fail(409, "文件已被更新，请刷新列表后重新确认删除")
+                    p.unlink()
+                self.send_json(200, {"ok": True, "name": p.name})
+            except ValueError as e: self.fail(400, str(e))
+            except Exception as e: self.fail(500, str(e))
     return Handler
 
 class IPv6Server(ThreadingHTTPServer): address_family = socket.AF_INET6

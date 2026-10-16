@@ -1,7 +1,7 @@
 """Two acyclic body translation solves sharing the existing animator controls."""
 import json
 
-VERSION='1.1.0'
+VERSION='1.1.1'
 
 
 def _data(control):
@@ -36,7 +36,9 @@ def enable(rig):
         q=node('choice',label);edge(hips+'.bodyDrive',q+'.selector')
         if source:edge(source,q+'.input[0]')
         else:
-            v=node('plusMinusAverage',label+'Rest');c.setAttr(v+'.input3D[0]',*value,type='double3');edge(v+'.output3D',q+'.input[0]')
+            # The static hips zero is also the downstream IK hip reference.
+            # Store it as double3, not plusMinusAverage's float3 constant.
+            v=node('composeMatrix',label+'Rest');c.setAttr(v+'.inputTranslate',*value,type='double3');edge(v+'.inputTranslate',q+'.input[0]')
         edge(back,q+'.input[1]');replace(q+'.output',dst)
     try:
         c.addAttr(hips,ln='bodyDrive',nn='身体驱动',at='enum',en='腰部驱动:胸部驱动',keyable=True)

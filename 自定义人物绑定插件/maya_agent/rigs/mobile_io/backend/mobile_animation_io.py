@@ -87,9 +87,11 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
     smooth=set(smooth) if interpolation=='maya-auto-ease' else set()
     policy=package.get('curvePolicy','merge')
     if policy not in ('merge','replace-auto-ease-tracks'): raise ValueError('不支持的曲线导入策略')
-    tangent_modes={};replace_plugs=set()
+    curve_io=runpy.run_path(str(Path(__file__).with_name('animation_curves.py')))
+    import_rows,source_specs,static_channels=curve_io['prepare'](package,base)
+    tangent_modes={};replace_plugs=set();original_plugs={};static_plugs={}
     resolved={};operations=[];seen=set()
-    for row in package.get('keys',[]):
+    for row in import_rows:
         frame=number(row['frame'])*time_scale
         for uid,pose in row.get('values',{}).items():
             if (uid,frame) in seen: raise ValueError('同一控制器关键帧重复')
@@ -125,6 +127,8 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
                 if any(cmds.nodeType(n) not in ('animCurveTA','animCurveTL','animCurveTU') for n in drivers): raise ValueError('约束、动画层或其他驱动通道: '+plug)
                 operations.append((plug,frame,value));tangent_modes[plug]='step' if uid in step_ids else 'autoease' if uid in smooth else 'linear'
                 if uid in smooth:replace_plugs.add(plug)
+                if (uid,attr) in source_specs:original_plugs[plug]=source_specs[uid,attr]
+                if (uid,attr) in static_channels:static_plugs[plug]=value
             for attr,value in attributes.items():
                 plug=driven_attribute_target(node,attr)
                 if cmds.getAttr(plug,lock=True) or cmds.referenceQuery(node,isNodeReferenced=True): raise ValueError('锁定通道或引用节点: '+plug)
@@ -132,7 +136,7 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
                 if any(cmds.nodeType(n) not in ('animCurveTA','animCurveTL','animCurveTU','animCurveUU','animCurveUL','animCurveUA') for n in drivers): raise ValueError('约束、动画层或其他驱动通道: '+plug)
                 operations.append((plug,frame,value));tangent_modes[plug]='autoease' if uid in smooth else 'linear'
     if not operations: raise ValueError('没有可导入关键帧')
-    result={'characterId':cid,'rigVersion':package['rigVersion'],'keys':len(seen),'channelKeys':len(operations),'controls':sorted(resolved.values()),'dryRun':bool(dry_run),'valueSpace':mode,'interpolation':interpolation,'timeScale':time_scale,'curvePolicy':policy}
+    result={'characterId':cid,'rigVersion':package['rigVersion'],'keys':len(seen),'channelKeys':sum(plug not in static_plugs for plug,_,_ in operations),'controls':sorted(resolved.values()),'dryRun':bool(dry_run),'valueSpace':mode,'interpolation':interpolation,'timeScale':time_scale,'curvePolicy':policy,'originalCurveTracks':len(original_plugs),'staticChannels':len(static_plugs),'legacySampledImport':package.get('curvePayloadVersion')!=1 and bool(package.get('sampling'))}
     if dry_run: return result
     if not cmds.undoInfo(q=True,state=True): raise RuntimeError('撤销关闭，无法安全回滚')
     backup={'scene':cmds.file(q=True,sn=True),'package':str(path),'channels':{}}
@@ -140,6 +144,11 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
         data={'value':cmds.getAttr(plug),'times':cmds.keyframe(plug,q=True,tc=True) or [],'values':cmds.keyframe(plug,q=True,vc=True) or []}
         for flag in ('inTangentType','outTangentType','inAngle','outAngle','inWeight','outWeight','weightedTangents','lock','weightLock'):
             data[flag]=cmds.keyTangent(plug,q=True,**{flag:True}) or []
+        data['breakdownTimes']=cmds.keyframe(plug,q=True,breakdown=True,tc=True) or []
+        drivers=cmds.listConnections(plug,source=True,destination=False,type='animCurve') or []
+        if drivers:
+            for field in ('preInfinity','postInfinity','rotationInterpolation'):
+                if cmds.attributeQuery(field,node=drivers[0],exists=True):data[field]=cmds.getAttr(drivers[0]+'.'+field)
         backup['channels'][plug]=data
     folder=Path(backup_directory) if backup_directory else Path(path).parent/'maya-animation-backups';folder.mkdir(parents=True,exist_ok=True)
     backup_path=folder/(datetime.now().strftime('%Y%m%d-%H%M%S-%f')+'.json')
@@ -150,6 +159,8 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
     previous_busy=arm_ik._busy;arm_ik._busy=True
     cmds.undoInfo(openChunk=True,chunkName='MayaMobileAnimationImport')
     try:
+        for plug in set(original_plugs)|set(static_plugs):
+            started=True;cmds.cutKey(plug,clear=True)
         # A mobile-authored curve is a complete track. Retaining hidden old Maya keys
         # would change Auto Ease slopes. The full original curves are backed up above.
         if policy=='replace-auto-ease-tracks':
@@ -159,7 +170,11 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
                     if cmds.listConnections(plug,source=True,destination=False,type='animCurve'):
                         cmds.keyTangent(plug,weightedTangents=False)
         for plug,frame,value in operations:
+            if plug in static_plugs:continue
             started=True;cmds.setKeyframe(plug,time=frame,value=value,inTangentType='linear' if tangent_modes[plug]=='step' else tangent_modes[plug],outTangentType=tangent_modes[plug])
+        for plug,value in static_plugs.items():
+            started=True;cmds.setAttr(plug,value)
+        for plug,data in original_plugs.items():curve_io['restore_tangents'](plug,data,time_scale)
     except Exception:
         cmds.undoInfo(closeChunk=True)
         if started: cmds.undo()

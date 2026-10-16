@@ -2,7 +2,7 @@
 import json
 
 
-def ensure_controller(character,owner):
+def ensure_controller(character,owner,pose_samples=None):
     """Add a native box animator in its switching space, retaining prop curves.
 
     TR inputs move to the animator without changing their values. Other local
@@ -30,10 +30,10 @@ def ensure_controller(character,owner):
         plug=target+'.'+a;inputs[a]=c.connectionInfo(plug,sfd=True);values[a]=c.getAttr(plug);locked[a]=c.getAttr(plug,lock=True)
         if inputs[a] and not c.nodeType(inputs[a].split('.')[0]).startswith('animCurveT'):
             raise ValueError('通用物件通道已有外部驱动或动画层，不能直接转接：'+plug)
-    before=c.xform(target,q=True,ws=True,m=True)
+    before=pose_samples[c.currentTime(q=True)] if pose_samples else c.xform(target,q=True,ws=True,m=True)
     old_owner=c.getAttr(owner+'.genericSpaceData');old_rig=c.getAttr(character+'.integratedRigData')
     selection=[c.ls(n,uuid=True)[0] for n in c.ls(sl=True,l=True) or []]
-    auto=c.autoKeyframe(q=True,state=True);control=None;transferred=[];driver=None
+    auto=c.autoKeyframe(q=True,state=True);control=None;transferred=[];driver=None;animation_receipt=None
     c.undoInfo(openChunk=True,chunkName='CreateGenericBoxControl');c.autoKeyframe(state=False)
     try:
         prefix=owner.rsplit('_mode',1)[0]
@@ -74,6 +74,12 @@ def ensure_controller(character,owner):
             driver=install_driver(data,target,control)
             data['hierarchy_driver']=driver
             data['created']+=driver['nodes']
+        if pose_samples:
+            from .generic_animation import bake
+            animation_receipt=bake(data,control,pose_samples)
+            if animation_receipt:
+                data['animation_transfer']=animation_receipt
+                data['created']+=animation_receipt['nodes']
         # These are native channels: S/autokey and Maya's move/rotate tools work
         # directly, including non-zero joint orientations and animated pivots.
         if max(abs(a-b) for a,b in zip(before,c.xform(target,q=True,ws=True,m=True)))>1e-5:
@@ -88,6 +94,9 @@ def ensure_controller(character,owner):
         c.setAttr(character+'.integratedRigData',lock=False);c.setAttr(character+'.integratedRigData',json.dumps(rig,ensure_ascii=False),type='string',lock=True)
         return data
     except Exception:
+        if animation_receipt:
+            from .generic_animation import restore as restore_animation
+            restore_animation(control,animation_receipt)
         if driver:
             from .generic_hierarchy import remove_driver
             remove_driver(driver,target,control)
@@ -139,6 +148,16 @@ def resolve_character(parent):
 
 def add(target,parent,character=None):
     import maya.cmds as c
+    from .generic_rebuild import recreate_if_deleted
+    c.undoInfo(openChunk=True,chunkName='AddOrRecreateGenericObject')
+    try:
+        restored=recreate_if_deleted(target,parent,character)
+        return restored if restored is not None else _add_new(target,parent,character)
+    finally:c.undoInfo(closeChunk=True)
+
+
+def _add_new(target,parent,character=None,_number=None,_node_number=None,_ignored_owner=None,_pose_samples=None):
+    import maya.cmds as c
     from .master_control import upgrade
     def unique(n):
         rows=c.ls(n,l=True) or []
@@ -163,6 +182,7 @@ def add(target,parent,character=None):
     rig=json.loads(c.getAttr(character+'.integratedRigData'))
     identity=c.ls(target,uuid=True)[0]
     for owner in c.ls('::*.genericSpaceData',o=True) or []:
+        if owner==_ignored_owner:continue
         record=_data(owner)
         if identity in (record.get('target_uuid'),record.get('control_uuid')):
             raise ValueError('此物件仍有有效通用绑定登记，不能重复创建：'+owner)
@@ -181,6 +201,8 @@ def add(target,parent,character=None):
         if source and not c.nodeType(source.split('.')[0]).startswith('animCurve'):
             raise ValueError('通用物件已有约束或驱动，不能改变其层级：'+target+'.'+attr)
     original_parent=(c.listRelatives(target,p=True,f=True) or [None])[0]
+    from .generic_animation import capture,has_animation
+    pose_samples=_pose_samples if _pose_samples is not None else (capture(target) if has_animation(target) else None)
     before=c.xform(target,q=True,ws=True,m=True)
     parent_matrix=c.xform(original_parent,q=True,ws=True,m=True) if original_parent else [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]
     selection=c.ls(sl=True,l=True) or [];selection_ids=[c.ls(n,uuid=True)[0] for n in selection]
@@ -191,8 +213,8 @@ def add(target,parent,character=None):
         metadata_before=c.getAttr(character+'.integratedRigData')
         master_path=unique(master)
         if master_path.startswith(target+'|'):raise ValueError('通用物件不能包含总控制圆环。')
-        number=max([0]+[r['number'] for r in rig.get('generic_objects',[])])+1
-        prefix=rig['namespace']+':generic%02d_'%number
+        number=_number or max([0]+[r['number'] for r in rig.get('generic_objects',[])])+1
+        prefix=rig['namespace']+':generic%02d_'%(_node_number or number)
         def node(kind,name,**kwargs):
             n=c.createNode(kind,name=prefix+name,**kwargs);created.append(n);return n
         local=node('transform','parentSpace',parent=parent);c.xform(local,ws=True,m=parent_matrix)
@@ -220,6 +242,8 @@ def add(target,parent,character=None):
                   control=target,global_plug=owner+'.global',group=group,compensation=compensation,offsets=offsets,
                   owner=owner,master=master,original_parent=original_parent,created=created,
                   original_parent_uuid=c.ls(original_parent,uuid=True)[0] if original_parent else None,preserve_hierarchy=True)
+        from .generic_rebuild import backup_source
+        data['source_backup']=backup_source(target,prefix,created)
         c.addAttr(owner,ln='genericSpaceData',dt='string');c.setAttr(owner+'.genericSpaceData',json.dumps(data),type='string',lock=True)
         if not marker_exists:c.addAttr(target,ln='genericSpaceOwner',at='message')
         c.connectAttr(owner+'.message',target+'.genericSpaceOwner')
@@ -227,7 +251,7 @@ def add(target,parent,character=None):
         c.setAttr(character+'.integratedRigData',lock=False);c.setAttr(character+'.integratedRigData',json.dumps(rig,ensure_ascii=False),type='string',lock=True)
         from maya_agent.rigs import arm_ik
         arm_ik.install()
-        return ensure_controller(character,owner)
+        return ensure_controller(character,owner,pose_samples=pose_samples)
     except Exception:
         if metadata_before is not None:
             c.setAttr(character+'.integratedRigData',lock=False)

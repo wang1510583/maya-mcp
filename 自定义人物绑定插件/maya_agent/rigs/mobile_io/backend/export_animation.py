@@ -43,13 +43,12 @@ def export(snapshot_path, graph_path, destination, reference_path):
     if fps is None and unit.endswith('fps'):fps=float(unit[:-3])
     if fps is None:raise ValueError('Unsupported time unit '+unit)
     baseline=outputs();keys=[];cases=[];markers={};source_curves={}
+    capture_curve=runpy.run_path(str(Path(__file__).with_name('animation_curves.py')))['capture']
     for op in inputs:
         uid=op['data']['id'];attr=ATTRS[op['data']['axis']];plug=op['name']
-        times=c.keyframe(plug,q=True,tc=True) or []
-        if not times:continue
+        curve=capture_curve(plug);times=curve['times']
         markers.setdefault(uid,set()).update(t for t in times if start<=t<=end)
-        source_curves.setdefault(uid,{})[attr]={'times':times,'values':c.keyframe(plug,q=True,vc=True),
-            'inTangentTypes':c.keyTangent(plug,q=True,itt=True),'outTangentTypes':c.keyTangent(plug,q=True,ott=True)}
+        source_curves.setdefault(uid,{})[attr]=curve
     try:
         for frame in range(start,end+1):
             c.currentTime(frame,edit=True)
@@ -61,10 +60,8 @@ def export(snapshot_path, graph_path, destination, reference_path):
             cases.append({'name':'frame-'+str(frame),'inputs':{reverse[uid]:v for uid,v in values.items()},'outputs':outputs()})
     finally:
         c.currentTime(before['frame'],edit=True)
-        # Maya may leave constraint/IK outputs dirty after sampling many
-        # frames. Force a fresh evaluation before comparing the original
-        # scene; changing time alone is not sufficient for cached DG nodes.
-        try:c.dgdirty(all=True)
+        # Re-evaluate constraint and IK outputs after restoring time.
+        try:c.dgdirty(allPlugs=True)
         except Exception:pass
         c.refresh(force=True)
         c.file(modified=before['modified'])
@@ -84,7 +81,8 @@ def export(snapshot_path, graph_path, destination, reference_path):
     animation={'format':'maya-mobile-animation','schemaVersion':1,'characterId':snap['characterId'],'rigVersion':snap['rigVersion'],
         'source':'maya-sampled-export','frame':start,'fps':fps,'interpolation':'linear','valueSpace':'snapshot-local-delta',
         'sourceSnapshotSha256':graph['sourceSnapshotSha256'],'sourceFrame':snap['sourceFrame'],'frameRange':[start,end],
-        'sampling':{'step':1,'sourceTimeUnit':unit,'originalCurveTangentsPreserved':False},
+        'curvePayloadVersion':1,
+        'sampling':{'step':1,'sourceTimeUnit':unit,'originalCurveTangentsPreserved':True},
         'keyMarkers':{uid:sorted(times) for uid,times in markers.items()},'sourceCurves':source_curves,'keys':keys,
         'stepControls':step_ids}
     fixture={'labels':labels,'baseline':baseline,'cases':cases,**report}
