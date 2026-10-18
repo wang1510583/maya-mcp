@@ -1,6 +1,6 @@
 {
   "integrated_version": "1.26.12",
-  "body_version": "1.4.6",
+  "body_version": "1.4.7",
   "files": [
     {
       "path": "BIP_RETARGET_README.md",
@@ -159,8 +159,8 @@
     },
     {
       "path": "maya_agent/rigs/custom_body/continuous_rotation.py",
-      "bytes": 8436,
-      "sha256": "73fb29cac91bf6b7577a706005ead28b91056780585c50bb12636b50c6152f10"
+      "bytes": 15016,
+      "sha256": "e35ad3339b6017b18a33d0db0e650e0a64c030662bef21a82559cfdc0c34afe4"
     },
     {
       "path": "maya_agent/rigs/custom_body/controls.py",
@@ -205,7 +205,7 @@
     {
       "path": "maya_agent/rigs/custom_body/definition.py",
       "bytes": 2050,
-      "sha256": "08d61402e103aee82ddad13075e12f6ac74695148b2bd917c4f4aef0368122bd"
+      "sha256": "9f4b1f1f5ad9901c914f57297ffeda51fcd9a82ed07fceb5bbad74cbb22d5c8d"
     },
     {
       "path": "maya_agent/rigs/custom_body/display.py",
@@ -229,8 +229,13 @@
     },
     {
       "path": "maya_agent/rigs/custom_body/README.md",
-      "bytes": 17775,
-      "sha256": "affc5485458569b4f614abb0aa4c8ff302e4134d828e764b78d287406ca12bad"
+      "bytes": 19866,
+      "sha256": "3bce97ccf2e43c2abf0a895aa58fb41eea859957273caa8e30af7c6c097ca3c1"
+    },
+    {
+      "path": "maya_agent/rigs/custom_body/rotation_reference.py",
+      "bytes": 3569,
+      "sha256": "fbc04f7c39fa76dd71637ae2583c10491954594a7c742540e8f5b9fe6191b15a"
     },
     {
       "path": "maya_agent/rigs/custom_body/skeleton.py",
@@ -349,8 +354,8 @@
     },
     {
       "path": "maya_agent/rigs/integrated/README.md",
-      "bytes": 61825,
-      "sha256": "008ab8137ea1b0df89449228f5f94c1611775c890b443dba8d4e4e627c0fcf9e"
+      "bytes": 62117,
+      "sha256": "348a256549c8c7f061931dd855d47aaf4250488518fcc34eb8c87a0a77b54249"
     },
     {
       "path": "maya_agent/rigs/integrated/shoulder.py",
@@ -415,7 +420,7 @@
     {
       "path": "maya_agent/rigs/mobile_io/__init__.py",
       "bytes": 169,
-      "sha256": "44152ab81b9e4a257b233cb466e9fe092ceafe23d05187072912e5e2880420d8"
+      "sha256": "f01a01c3fb3f2775c0455f013f6a97c6d9dc6d823551845a0785db6d97bbe824"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/animation_curves.py",
@@ -444,8 +449,8 @@
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_portable_graph.py",
-      "bytes": 23271,
-      "sha256": "16dafc123bd52755773faa218a9aa2c3497933ab6c7172667360047bf41f5e63"
+      "bytes": 23945,
+      "sha256": "2fc56e4254b567d3ebdb370663ae7c81da85c9f0f9b23d41b8957ce839209958"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_snapshot.py",
@@ -459,8 +464,8 @@
     },
     {
       "path": "maya_agent/rigs/mobile_io/README.md",
-      "bytes": 6596,
-      "sha256": "a8f2a92f3de5ca5f00c1154c2740beb48a48422344e5bd47a61eacac92218412"
+      "bytes": 6984,
+      "sha256": "d89b56a151b540c5c4966b781602a5e22440b7c815441f8cecdd823f365fb5ac"
     },
     {
       "path": "maya_agent/rigs/mobile_io/server/maya_mobile_exchange_server.py",

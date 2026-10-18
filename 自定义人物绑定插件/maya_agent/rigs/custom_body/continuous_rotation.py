@@ -2,19 +2,29 @@
 import math
 import json
 
-VERSION = '1.0.0'
+VERSION = '2.0.0'
 ATTRIBUTE = 'continuousBodyRotationData'
+
+
+def _registration(plug, value):
+    import maya.cmds as cmds
+    locked=cmds.getAttr(plug,lock=True)
+    if locked:cmds.setAttr(plug,lock=False)
+    try:cmds.setAttr(plug,value,type='string')
+    finally:
+        if locked:cmds.setAttr(plug,lock=True)
 
 
 class PoseMismatchError(ValueError):
     """Candidate was rolled back because it differs from the original solve."""
 
 
-def candidate(rig, preserve_current_branch=True):
+def candidate(rig, preserve_current_branch=True, preserve_animation=True):
     import maya.cmds as cmds
     import maya.api.OpenMaya as om
 
     created = []
+    selection = cmds.ls(selection=True,long=True) or []
     namespace = rig['namespace']
     controls = rig['controls']
 
@@ -37,20 +47,45 @@ def candidate(rig, preserve_current_branch=True):
         quaternion = om.MTransformationMatrix(om.MMatrix(matrix)).rotation(asQuaternion=True)
         return product(product(list(quaternion), source, label + 'Pre'), list(quaternion.inverse()), label + 'Post')
 
+    def local_rotation(control,label):
+        rotation=node('eulerToQuat',label)
+        cmds.connectAttr(control+'.rotate',rotation+'.inputRotate')
+        cmds.connectAttr(control+'.rotateOrder',rotation+'.inputRotateOrder')
+        axis=node('eulerToQuat',label+'RotateAxis')
+        cmds.connectAttr(control+'.rotateAxis',axis+'.inputRotate')
+        return product(axis+'.outputQuat',rotation+'.outputQuat',label+'Local')
+
     try:
         endpoints = {}
         for role in ('hips', 'chest'):
-            rotation = node('eulerToQuat', role)
-            cmds.connectAttr(controls[role] + '.rotate', rotation + '.inputRotate')
-            cmds.connectAttr(controls[role] + '.rotateOrder', rotation + '.inputRotateOrder')
-            endpoints[role] = rotation + '.outputQuat'
+            control=controls[role]
+            source=local_rotation(control,role)
+            index=0 if role=='hips' else len(controls)-1
+            effective=namespace+':bodyMatch_effective'+str(index)
+            if cmds.objExists(effective):
+                # Keep the authored Euler lift through each factor. Decomposing
+                # their matrix product first would recreate the +/-180 branch.
+                space=cmds.connectionInfo(effective+'.matrixIn[2]',sourceFromDestination=True)
+                if not space.endswith('.matrix'):raise ValueError('不支持的身体匹配旋转空间：'+space)
+                offset=node('decomposeMatrix',role+'Offset')
+                cmds.connectAttr(control+'.offsetParentMatrix',offset+'.inputMatrix')
+                inverse=node('quatInvert',role+'OffsetInverse')
+                cmds.connectAttr(offset+'.outputQuat',inverse+'.inputQuat')
+                source=product(source,offset+'.outputQuat',role+'WithOffset')
+                source=product(source,local_rotation(space.split('.')[0],role+'Match'),role+'WithMatch')
+                source=product(source,inverse+'.outputQuat',role+'Matched')
+            endpoints[role] = source
         inherited = namespace + ':bodyFollow_hipsInChest'
         if cmds.objExists(inherited):
             transformed = conjugate(endpoints['hips'], cmds.getAttr(inherited + '.matrixIn[0]'), 'Inherited')
-            blend = node('quatSlerp', 'Follow')
-            cmds.setAttr(blend + '.input1Quat', 0, 0, 0, 1, type='double4')
-            cmds.connectAttr(transformed, blend + '.input2Quat')
-            cmds.connectAttr(namespace + ':bodyFollow_inheritedRotation.target[0].weight', blend + '.inputT')
+            axis_angle = node('quatToAxisAngle', 'FollowAxis')
+            cmds.connectAttr(transformed, axis_angle + '.inputQuat')
+            weight = node('multDoubleLinear', 'FollowWeight')
+            cmds.connectAttr(axis_angle + '.outputAngle', weight + '.input1')
+            cmds.connectAttr(namespace + ':bodyFollow_inheritedRotation.target[0].weight', weight + '.input2')
+            blend = node('axisAngleToQuat', 'Follow')
+            cmds.connectAttr(axis_angle + '.outputAxis', blend + '.inputAxis')
+            cmds.connectAttr(weight + '.output', blend + '.inputAngle')
             endpoints['chest'] = product(endpoints['chest'], blend + '.outputQuat', 'ChestFollow')
         outputs = []
         for role, control in controls.items():
@@ -89,12 +124,34 @@ def candidate(rig, preserve_current_branch=True):
             rotation = node('quatToEuler', role + 'Euler')
             cmds.connectAttr(normalize + '.outputQuat', rotation + '.inputQuat')
             cmds.connectAttr(constraint + '.constraintRotateOrder', rotation + '.inputRotateOrder')
-            outputs.append(dict(role=role, original=constraint + '.constraintRotate', replacement=rotation + '.outputRotate'))
-        return dict(created=created, outputs=outputs)
+            outputs.append(dict(role=role, original=constraint + '.constraintRotate', replacement=rotation + '.outputRotate', continuous_quat=normalize + '.outputQuat'))
+        reference_data = None
+        if preserve_animation:
+            from .rotation_reference import Reference
+            reference = Reference(namespace, created)
+            for row in outputs:
+                original_ref = reference.source(row['original'])
+                continuous_ref = reference.source(row['continuous_quat'])
+                source = row['original'].split('.')[0]
+                original_quat = node('eulerToQuat', row['role']+'ReferenceEuler')
+                cmds.connectAttr(original_ref,original_quat+'.inputRotate')
+                cmds.connectAttr(original_ref.split('.')[0]+'.constraintRotateOrder',original_quat+'.inputRotateOrder')
+                inverse = node('quatInvert',row['role']+'ReferenceInverse')
+                cmds.connectAttr(continuous_ref,inverse+'.inputQuat')
+                correction = product(original_quat+'.outputQuat',inverse+'.outputQuat',row['role']+'ReferenceCorrection')
+                corrected = product(correction,row['continuous_quat'],row['role']+'PreservedMotion')
+                rotation = node('quatToEuler',row['role']+'PreservedEuler')
+                cmds.connectAttr(corrected,rotation+'.inputQuat')
+                cmds.connectAttr(source+'.constraintRotateOrder',rotation+'.inputRotateOrder')
+                row['replacement']=rotation+'.outputRotate'
+            reference_data=dict(version='1.0.0',group=reference.group,copies=reference.copies)
+        return dict(created=created, outputs=outputs, animation_reference=reference_data)
     except Exception:
         if created:
             cmds.delete(created)
         raise
+    finally:
+        cmds.select(selection,replace=True) if selection else cmds.select(clear=True)
 
 
 def enable(rig, sample_frames=None):
@@ -163,4 +220,54 @@ def disable(rig):
     cmds.delete(data['created'])
     cmds.deleteAttr(plug)
     rig.pop('continuous_rotation', None)
+    return True
+
+
+def repair_character(root, sample_frames=None):
+    """Explicit existing-character repair. Preserve authored curves and native interpolation."""
+    import maya.cmds as cmds
+    plug=root+'.integratedRigData'
+    if cmds.referenceQuery(root,isNodeReferenced=True):raise ValueError('引用角色需在原绑定文件中显式修复')
+    original=cmds.getAttr(plug);metadata=json.loads(original)
+    part=metadata.get('parts',{}).get('body')
+    if not part:raise ValueError('当前角色没有身体绑定')
+    owner=part['controls']['hips']+'.'+ATTRIBUTE
+    if cmds.objExists(owner):
+        existing=json.loads(cmds.getAttr(owner))
+        if existing.get('version')==VERSION:return dict(version=VERSION,already_enabled=True)
+        raise ValueError('当前角色已有其他版本的连续旋转，请先显式恢复旧求解后升级')
+    restore=dict(body=json.loads(json.dumps(part)),fallback=metadata.get('continuous_rotation_fallback'),repair=metadata.get('continuous_rotation_repair'))
+    if sample_frames is None:
+        start=cmds.playbackOptions(query=True,minTime=True);end=cmds.playbackOptions(query=True,maxTime=True)
+        if end-start>10000:raise ValueError('动画范围过长，请显式指定核对帧')
+        sample_frames=[start+i*.25 for i in range(int((end-start)*4)+1)]
+    sample_frames=list(sample_frames)
+    enabled=False
+    try:
+        data=enable(part,sample_frames=sample_frames);enabled=True
+        data['character_restore']=restore;data['checked_frames']=sorted(set(sample_frames))
+        cmds.setAttr(owner,json.dumps(data),type='string')
+        metadata.pop('continuous_rotation_fallback',None)
+        metadata['continuous_rotation_repair']=dict(version=VERSION,reference='independent_native_animation',checked_frames=len(data['checked_frames']))
+        _registration(plug,json.dumps(metadata))
+        return dict(version=VERSION,created=len(data['created']),checked_frames=len(data['checked_frames']),max_rotation_error=data['max_rotation_error'],max_pose_error=data['max_pose_error'])
+    except Exception:
+        if enabled:disable(part)
+        _registration(plug,original)
+        raise
+
+
+def restore_character(root):
+    """Restore the previous solve/registration; never replace other character parts."""
+    import maya.cmds as cmds
+    plug=root+'.integratedRigData';metadata=json.loads(cmds.getAttr(plug));part=metadata['parts']['body']
+    owner=part['controls']['hips']+'.'+ATTRIBUTE
+    if not cmds.objExists(owner):return False
+    data=json.loads(cmds.getAttr(owner));restore=data.get('character_restore')
+    if not restore:raise ValueError('该连续旋转系统没有角色升级恢复记录')
+    disable(part);metadata['parts']['body']=restore['body']
+    for key,name in (('continuous_rotation_fallback','fallback'),('continuous_rotation_repair','repair')):
+        if restore.get(name) is None:metadata.pop(key,None)
+        else:metadata[key]=restore[name]
+    _registration(plug,json.dumps(metadata))
     return True

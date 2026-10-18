@@ -48,6 +48,12 @@ class Compiler:
     def value(self,p):
         if p.isCompound:return [self.value(p.child(i))[0] for i in range(p.numChildren())]
         a=p.attribute()
+        fn=om.MFnDependencyNode(p.node())
+        if fn.typeName=='choice' and p.partialName(useLongNames=True)=='output':
+            selected=c.getAttr(fn.name()+'.selector')
+            return self.value(self.plug(fn.name()+'.input[%d]'%selected))
+        if (a.hasFn(om.MFn.kGenericAttribute) or a.hasFn(om.MFn.kTypedAttribute)) and p.isDestination:
+            return self.value(p.sourceWithConversion())
         if a.hasFn(om.MFn.kMatrixAttribute):return list(om.MFnMatrixData(p.asMObject()).matrix())
         if a.hasFn(om.MFn.kTypedAttribute) or a.hasFn(om.MFn.kGenericAttribute):
             try:
@@ -143,6 +149,8 @@ class Compiler:
         if typ.startswith('animBlendNodeAdditive') and attr=='output':return op('animBlend',['inputA','inputB','weightA','weightB'])
         if typ=='eulerToQuat' and attr=='outputQuat':return op('eulerQuat',['inputRotate','inputRotateOrder'])
         if typ=='quatToEuler' and attr=='outputRotate':return op('quatEuler',['inputQuat','inputRotateOrder'])
+        if typ=='quatToAxisAngle' and attr in ('outputAxis','outputAngle'):return op('quatAxis' if attr=='outputAxis' else 'quatAngle',['inputQuat'])
+        if typ=='axisAngleToQuat' and attr=='outputQuat':return op('axisQuat',['inputAxis','inputAngle'])
         if typ in ('quatProd','quatAdd','quatSlerp') and attr=='outputQuat':return op(typ,['input1Quat','input2Quat']+(['inputT'] if typ=='quatSlerp' else []))
         if typ in ('quatNormalize','quatInvert','quatNegate','quatConjugate') and attr=='outputQuat':return op(typ,['inputQuat'])
         if typ=='expression' and attr.startswith('output['):

@@ -5,7 +5,7 @@ import re
 import math
 
 DISPLAY_NAME = "自定义身体绑定"
-VERSION = "1.4.6"
+VERSION = "1.4.7"
 DATA_PATH = Path(__file__).parent / "data" / "body_v1.json"
 RECIPE_PATH = DATA_PATH.with_name("body_v7.json")
 COMPONENT_ORDER = ("controls", "skeleton", "drivers", "display")
