@@ -415,17 +415,17 @@
     {
       "path": "maya_agent/rigs/mobile_io/__init__.py",
       "bytes": 163,
-      "sha256": "eb276036950e235b9803749c01b559dfa7cbdacc6b6bed29f681948d9f2f1e5d"
+      "sha256": "4dbf5f7df3d219af2b41ba970d9f42edd55c70edb65f131f5391dcb98b5dd203"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/animation_curves.py",
-      "bytes": 8273,
-      "sha256": "d62a44f060f91b0cb03fca5b6db635c0556c5f46e2bed6e1580136a39d287b12"
+      "bytes": 8134,
+      "sha256": "0ca60bf330009336ddde046bddbc9da164b06529a6c6fed457a9ca20a3852a32"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_animation.py",
-      "bytes": 5953,
-      "sha256": "cab9b214b6b4f998570a2c018d1a2925c6bfd88706339514074dccc8277777c6"
+      "bytes": 6120,
+      "sha256": "84d611edf62c2ab4562c6e6e6041686e6449f589727f638cd71337f926b50372"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_mesh_shading.py",
@@ -434,13 +434,13 @@
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_modes.py",
-      "bytes": 7524,
-      "sha256": "2612e52be86796a7f02eb58796c0c0864951f50521064d34ae7ad2a823e2157a"
+      "bytes": 10584,
+      "sha256": "8e28b9a99c27fa075a6ac091c2d8fde748f07974ff5aebae1c4c5944d2dc9473"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_portable_graph.py",
-      "bytes": 21727,
-      "sha256": "91b104a365cc057cd0baf4d4f3e02fb6f0e7c4dee725ab920e30ee3c70e02b8c"
+      "bytes": 22854,
+      "sha256": "eb03000e3593c7a55a9279194789b9ef4d9eef487f2a7944290d10f406e2b129"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_snapshot.py",
@@ -449,13 +449,13 @@
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/mobile_animation_io.py",
-      "bytes": 13350,
-      "sha256": "41d7b0fd96d8d687269b40151cb4107173cdb5fa028cd85eede61e682b5c1fad"
+      "bytes": 13457,
+      "sha256": "142d9c7c66e2282761abc35a9dbe9f5110c5b0bb0900e35efe583890ce470042"
     },
     {
       "path": "maya_agent/rigs/mobile_io/README.md",
-      "bytes": 4559,
-      "sha256": "7e283d45ae39e7bd15b4b97d576ae1c6403f68ba340f746dcc5485841b02aef7"
+      "bytes": 5384,
+      "sha256": "9b3b7ac9ae68192abb046f4bce451f546b12dd21b25f5f40ff53042865620625"
     },
     {
       "path": "maya_agent/rigs/mobile_io/server/maya_mobile_exchange_server.py",
@@ -464,8 +464,8 @@
     },
     {
       "path": "maya_agent/rigs/mobile_io/server/README.md",
-      "bytes": 1277,
-      "sha256": "312f84aa55419e4ea91dd015b297759460c04e438f7d558806aff7acfbeeb76e"
+      "bytes": 1263,
+      "sha256": "37141ccdc5b9f236d91e4c73bd3a6dc22228c15d6e8d100c83abb145a1b0f109"
     },
     {
       "path": "maya_agent/rigs/mobile_io/service.py",

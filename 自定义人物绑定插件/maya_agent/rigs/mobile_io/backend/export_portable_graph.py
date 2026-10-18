@@ -53,7 +53,11 @@ class Compiler:
             try:
                 obj=p.asMObject()
                 if obj.hasFn(om.MFn.kMatrixData):return list(om.MFnMatrixData(obj).matrix())
-            except RuntimeError:pass
+            except RuntimeError:
+                # Maya's unconnected typed-matrix constraint inputs have a
+                # null data object; their effective transform is identity.
+                if a.hasFn(om.MFn.kTypedAttribute) and om.MFnTypedAttribute(a).attrType()==om.MFnData.kMatrix and c.getAttr(p.name()) is None:
+                    return list(IDENTITY)
         if a.hasFn(om.MFn.kUnitAttribute):
             typ=om.MFnUnitAttribute(a).unitType()
             if typ==om.MFnUnitAttribute.kAngle:return [p.asMAngle().asRadians()]
@@ -241,11 +245,21 @@ def export(snapshot_path,destination):
     skins={}
     for mesh in snap['meshes']:
         skin=mesh['skin']['name']
-        if c.getAttr(skin+'.skinningMethod') not in (-1,0):raise ValueError('Unsupported skin method: '+skin)
+        source_method=method=c.getAttr(skin+'.skinningMethod')
+        if method==2:
+            import maya.api.OpenMayaAnim as oma
+            selection=om.MSelectionList();selection.add(skin);fnskin=oma.MFnSkinCluster(selection.getDependNode(0))
+            path=fnskin.getPathAtIndex(0);components=om.MFnSingleIndexedComponent();component=components.create(om.MFn.kMeshVertComponent)
+            components.addElements(range(om.MFnMesh(path).numVertices))
+            blend=list(fnskin.getBlendWeights(path,component))
+            if c.listConnections(skin+'.blendWeights',s=True,d=False) or any(v!=0. for v in blend):
+                raise ValueError('Unsupported nonzero or driven dual-quaternion blend weights: '+skin)
+            method=0  # Blended skin with identically zero DQ weights is linear.
+        if method not in (-1,0):raise ValueError('Unsupported skin method: '+skin)
         if c.getAttr(skin+'.envelope')!=1 or c.getAttr(skin+'.useComponents'):raise ValueError('Unsupported skin envelope or component mode: '+skin)
         p=compiler.plug(skin+'.input[0].inputGeometry');fn=om.MFnMesh(p.asMObject())
         geom=list(om.MFnMatrixData(compiler.plug(skin+'.geomMatrix').asMObject()).matrix())
-        skins[mesh['id']]={'inputPositions':[[v.x,v.y,v.z] for v in fn.getPoints(om.MSpace.kObject)],'geomMatrix':geom,'method':c.getAttr(skin+'.skinningMethod')}
+        skins[mesh['id']]={'inputPositions':[[v.x,v.y,v.z] for v in fn.getPoints(om.MSpace.kObject)],'geomMatrix':geom,'method':method,'sourceMethod':source_method}
     result={'format':'maya-portable-graph','version':1,'sourceSnapshotSha256':hashlib.sha256(snapshot_source.read_bytes()).hexdigest(),
             'characterId':snap['characterId'],'rigVersion':snap['rigVersion'],'sourceFrame':snap['sourceFrame'],
             'ops':compiler.ops,'outputs':outputs,'nativeArmGestures':native_arm_gestures,'nativeArmGestureVersion':3,'nativeControlGestures':native_control_gestures,'skins':skins,'editableInputs':{k:list(v) for k,v in compiler.inputs.items()}}

@@ -48,6 +48,37 @@ def extend_snapshot(snap):
                 cfg['offsetIds'].append(row(node,uid,key+'_match'+str(i),[node+'.'+a for a in TR]))
         modes[key]=cfg
     snap['modePanel']=modes
+    # Source skeleton ancestors and auxiliary joints can retain their own
+    # animation. Preserve these upstream inputs instead of freezing curves at
+    # the snapshot frame. They remain hidden, not additional manipulators.
+    registered=set()
+    for control in snap['controls']:
+        plugs=control.get('inputPlugs') or [control['path']+'.'+a for a in TR]
+        registered.update(canonical(p) for p in plugs if p)
+    nodes=[r['path'] for r in snap['controls']+snap.get('joints',[])]
+    for part in metadata['parts'].values():
+        if part.get('root'):
+            nodes.extend(c.listRelatives(part['root'],ad=True,fullPath=True,type='transform') or [])
+        for target in part.get('original_target_mapping',[]):
+            node=c.ls(target['target'],long=True)[0];nodes.append(node)
+            nodes.extend(c.listRelatives(node,ad=True,fullPath=True,type='transform') or [])
+            while True:
+                parents=c.listRelatives(node,p=True,fullPath=True) or []
+                if not parents:break
+                node=parents[0];nodes.append(node)
+    for item in metadata.get('generic_objects',[]):
+        node=c.ls(item['target_uuid'],long=True)[0];nodes.append(node)
+        nodes.extend(c.listRelatives(node,ad=True,fullPath=True,type='transform') or [])
+    history=(c.listHistory(nodes) or []) if nodes else []
+    for node in sorted(set(nodes+history)):
+        if c.nodeType(node) not in ('joint','transform'):continue
+        for attr in TR+('scaleX','scaleY','scaleZ'):
+            plug=canonical(node+'.'+attr)
+            if plug in registered:continue
+            source=c.connectionInfo(plug,sfd=True)
+            if source and c.nodeType(source.split('.')[0]) in ('animCurveTA','animCurveTL','animCurveTU','animCurveTT'):
+                uid=scalar(plug,'sourceAnimation_'+attr);registered.add(plug)
+                next(r for r in snap['controls'] if r['id']==uid)['sourceAnimation']=True
 
 def compile_modes(snap,cc):
     from maya_agent.rigs import zero_channels
@@ -76,6 +107,11 @@ def compile_modes(snap,cc):
             uid=next(iter(ids))
         return dict(id=uid,world=get(node,'worldMatrix[0]'),local=get(node,'matrix'),parent=get(node,'parentMatrix[0]'),
             editable=[r is not None and r[0]==uid for r in refs])
+    def scalar_input(plug):
+        ref=input_ref(plug)
+        if ref is None:raise ValueError('Unregistered arm offset input '+plug)
+        return dict(id=ref[0],axis=ref[1],base=c.getAttr(plug),value=cc.get(plug),
+                    toUi=180./__import__('math').pi if c.getAttr(plug,type=True)=='doubleAngle' else 1.)
     result={};aliases={}
     for key,source in snap.get('modePanel',{}).items():
         d=source['data'];cfg={k:source[k] for k in ('id','base','role')}
@@ -92,7 +128,13 @@ def compile_modes(snap,cc):
                 end=get(d['inputs']['end_locator'],'worldMatrix[0]'),endJoint=get(d['joints'][-1],'worldMatrix[0]'),
                 reach=cc.get(d['reach_plug']),stretchId=source['stretchId'],stretchBase=c.getAttr(d['stretch_plug']))
             cfg['reset']=[-zero_channels.offset(editable_plug(d['inputs']['end_locator']+'.'+a))-c.getAttr(editable_plug(d['inputs']['end_locator']+'.'+a)) for a in TR]
-            if d['offset_attrs']:raise ValueError('Arm animation offsets need explicit mobile matching: '+d['root'])
+            if d['offset_attrs']:
+                if len(d['offset_attrs'])!=6 or len(d['offset_inputs'])!=6 or not d.get('offset_output'):
+                    raise ValueError('Incomplete arm animation offset registration: '+d['root'])
+                node=d['offset_output'];parent=c.listRelatives(node,p=True,fullPath=True)[0]
+                cfg['animationOffsets']=dict(
+                    frame=dict(world=get(node,'worldMatrix[0]'),local=get(node,'matrix'),parentWorld=get(parent,'worldMatrix[0]')),
+                    ik=[scalar_input(p) for p in d['offset_attrs']],fk=[scalar_input(p) for p in d['offset_inputs']])
             roles={'end_fk':'wrist','pole_locator':'pole'}
             part=snap['rigMetadata']['parts']['arm_'+key[-1]]
             for visible_role,ik_role in roles.items():
@@ -125,4 +167,8 @@ def remap_modes(graph,visit):
         else:
             for f in list(cfg['ikFrames'].values())+list(cfg['fkFrames'].values()):frame(f)
             for key in ('end','endJoint','reach'):cfg[key]=visit(cfg[key])
+            if cfg.get('animationOffsets'):
+                offsets=cfg['animationOffsets']
+                for key in ('world','local','parentWorld'):offsets['frame'][key]=visit(offsets['frame'][key])
+                for row in offsets['ik']+offsets['fk']:row['value']=visit(row['value'])
     for cfg in graph.get('ikAliases',{}).values():frame(cfg['frame'])

@@ -22,7 +22,9 @@ def export(snapshot_path, graph_path, destination, reference_path):
     matrices={n:c.xform(n,q=True,ws=True,m=True) for n in nodes}
     edges=sorted(c.listConnections(nodes,c=True,p=True,s=True,d=False) or [])
     inputs=[o for o in graph['ops'] if o['op']=='input']
-    labels={r['part']+'/'+r['role']:r['id'] for r in snap['controls']}
+    from collections import Counter
+    counts=Counter(r['part']+'/'+r['role'] for r in snap['controls'])
+    labels={(r['part']+'/'+r['role']+('/'+r['id'] if counts[r['part']+'/'+r['role']]>1 else '')):r['id'] for r in snap['controls']}
     reverse={v:k for k,v in labels.items()}
     controls={r['id']:c.ls(r.get('nodeId',r['id']),long=True)[0] for r in snap['controls']}
     joints={r['id']:c.ls(r['id'],long=True)[0] for r in snap['joints']}

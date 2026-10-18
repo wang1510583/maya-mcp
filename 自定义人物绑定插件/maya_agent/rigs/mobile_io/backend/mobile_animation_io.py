@@ -96,7 +96,8 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
         for uid,pose in row.get('values',{}).items():
             if (uid,frame) in seen: raise ValueError('同一控制器关键帧重复')
             seen.add((uid,frame));node=resolved.setdefault(uid,resolve(bindings[uid]['nodeId'] if uid in bindings else uid))
-            if node not in registered or not node.startswith(root+'|'): raise ValueError('控制器不属于该角色登记表: '+uid)
+            source_animation=bindings.get(uid,{}).get('sourceAnimation',False)
+            if node not in registered or (not node.startswith(root+'|') and not source_animation): raise ValueError('控制器不属于该角色登记表: '+uid)
             attributes={}
             if not isinstance(pose,dict): channels={'rotateY':number(pose)}
             else:
