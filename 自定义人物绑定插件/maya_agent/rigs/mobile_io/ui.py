@@ -101,7 +101,7 @@ class ExchangeWindow(QtWidgets.QDialog):
     def perform_export(self):
         url,token=self.remote_args()
         report=service.export_to_server(self.root(),self.project_out.text(),url,token,True,self.start.value(),self.end.value(),self.progress)
-        self.perform_remote_list(preferred=report['name']);self.status.setText('工程已上传服务器：'+report['name']);return report
+        self.perform_remote_list(preferred=report['name']);self.status.setText('工程已上传服务器：'+report['name']+('（部分材质不支持，详见日志）' if (report.get('appearance') or {}).get('warnings') else ''));return report
     def perform_animation_export(self):
         url,token=self.remote_args()
         report=service.export_to_server(self.root(),self.animation_out.text(),url,token,progress=self.progress,project_name=self.remote_files.currentData())

@@ -270,10 +270,11 @@ def export(snapshot_path,destination):
         data=metadata(mesh)
         if data is not None:shading[mesh['id']]=data
     if shading:result['meshShading']={'format':'maya-mesh-shading','version':1,'sourceSnapshotSha256':result['sourceSnapshotSha256'],'meshes':shading}
+    result['meshAppearance']=runpy.run_path(str(Path(__file__).with_name('export_mesh_appearance.py')))['appearance'](snap,result['sourceSnapshotSha256'])
     if fingerprint()!=before:raise RuntimeError('Scene changed during read-only compilation')
     Path(destination).write_text(json.dumps(result,separators=(',',':'),allow_nan=False),encoding='utf8')
     from collections import Counter
-    return {'path':destination,'operations':len(compiler.ops),'types':dict(Counter(o['op'] for o in compiler.ops)), 'sceneUnchanged':True}
+    return {'path':destination,'operations':len(compiler.ops),'types':dict(Counter(o['op'] for o in compiler.ops)), 'sceneUnchanged':True,'appearance':{'textures':len(result['meshAppearance']['images']),'warnings':result['meshAppearance']['warnings']}}
 
 def compact(source,destination):
     """Remove dead branches, deduplicate constants and strip test truth values."""
@@ -312,5 +313,7 @@ def package_snapshot(snapshot_path,graph_path,destination,animation_path=None):
             raise ValueError('Animation snapshot mismatch')
         package['animation']=animation
     target.parent.mkdir(parents=True,exist_ok=True)
-    target.write_text(json.dumps(package,ensure_ascii=False,separators=(',',':'),allow_nan=False),encoding='utf8')
+    encoded=json.dumps(package,ensure_ascii=False,separators=(',',':'),allow_nan=False).encode('utf8')
+    if len(encoded)>32*1024*1024:raise ValueError('Mobile project exceeds 32 MiB limit; reduce mesh/animation/texture size')
+    target.write_bytes(encoded)
     return {'path':str(target),'sourceSnapshotSha256':graph['sourceSnapshotSha256'],'bytes':target.stat().st_size}

@@ -1,5 +1,5 @@
 """Portable Maya/Android exchange UI; importing this module does not change a scene."""
-VERSION='1.1.0'
+VERSION='1.2.0'
 
 def show_ui():
     from .ui import show

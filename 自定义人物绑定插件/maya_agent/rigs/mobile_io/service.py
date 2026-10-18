@@ -38,7 +38,7 @@ def export_to_server(root, name, base, token, project=False, start=None, end=Non
             report=export_animation(root,str(baseline),target,progress)
         progress('正在上传服务器…')
         uploaded=network_upload(base,token,target,name)
-        return dict(name=name,server=uploaded,characterId=report.get('characterId'),serverSync=True)
+        return dict(name=name,server=uploaded,characterId=report.get('characterId'),serverSync=True,appearance=report.get('appearance'))
 
 def module(name):return runpy.run_path(str(BACKEND/(name+'.py')))
 
@@ -94,13 +94,13 @@ def export_project(root,destination,include_animation=True,start=None,end=None,p
         progress('1/4 读取角色、手指、通用物件和蒙皮…');report=module('export_snapshot')['export'](root,str(snapshot))
         snap=json.loads(snapshot.read_text('utf8'));snap['frameRange']=[int(start),int(end)]
         snapshot.write_text(json.dumps(snap,ensure_ascii=False,separators=(',',':'),allow_nan=False),'utf8')
-        progress('2/4 编译手机离线求解与模式切换…');compiler=module('export_portable_graph');compiler['export'](str(snapshot),str(debug));compiler['compact'](str(debug),str(graph))
+        progress('2/4 编译手机离线求解与模式切换…');compiler=module('export_portable_graph');compile_report=compiler['export'](str(snapshot),str(debug));compiler['compact'](str(debug),str(graph))
         if include_animation:
             progress('3/4 采样动画，完成后恢复 Maya 当前帧…');animation_report=module('export_animation')['export'](str(snapshot),str(graph),str(animation),str(d/'reference.json'))
         else:animation_report=None
         progress('4/4 生成手机工程文件…');compiler['package_snapshot'](str(snapshot),str(graph),str(d/'package.json'),str(animation) if include_animation else None)
         write_new(d/'package.json',target)
-        return dict(path=str(target),characterId=uid,rigVersion=meta['version'],controls=report['visibleControls'],meshes=report['meshes'],frameRange=[start,end],animation=animation_report,bytes=target.stat().st_size)
+        return dict(path=str(target),characterId=uid,rigVersion=meta['version'],controls=report['visibleControls'],meshes=report['meshes'],frameRange=[start,end],animation=animation_report,bytes=target.stat().st_size,appearance=compile_report.get('appearance'))
 
 def export_animation(root,project_path,destination,progress=lambda text:None):
     if Path(destination).exists():raise ValueError('动画文件已存在，请更换文件名。')
@@ -122,7 +122,7 @@ def export_animation(root,project_path,destination,progress=lambda text:None):
             snapshot=d/'snapshot.json';debug=d/'graph-debug.json';graph=d/'graph.json'
             progress('读取当前角色工程身份并编译手机求解…');module('export_snapshot')['export'](root,str(snapshot))
             snap=json.loads(snapshot.read_text('utf8'));snap['frameRange']=[start,end];snapshot.write_text(json.dumps(snap,ensure_ascii=False,separators=(',',':'),allow_nan=False),'utf8')
-            compiler=module('export_portable_graph');compiler['export'](str(snapshot),str(debug));compiler['compact'](str(debug),str(graph))
+            compiler=module('export_portable_graph');compile_report=compiler['export'](str(snapshot),str(debug));compiler['compact'](str(debug),str(graph))
         progress('按当前工程身份采样 Maya 动画…')
         report=module('export_animation')['export'](str(d/'snapshot.json'),str(d/'graph.json'),str(d/'animation.json'),str(d/'reference.json'))
         write_new(d/'animation.json',destination)
