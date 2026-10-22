@@ -50,6 +50,13 @@ def _world(node, desired, destinations, solve_translation=True):
             if not c.getAttr(plug,lock=True) and abs(value)>1e-9:_set(plug,c.getAttr(plug)+value)
         return
     parent = om.MMatrix(c.getAttr(node+'.parentMatrix[0]'))
+    from .external_constraints import registry as external_constraint_registry
+    if external_constraint_registry(node):
+        # parentMatrix already includes OPM in Maya. The temporary constraint
+        # adds a non-identity OPM: use the DAG parent here to count it just once.
+        dag_parent=(c.listRelatives(node,parent=True,fullPath=True) or [None])[0]
+        parent=(om.MMatrix(c.xform(dag_parent,q=True,ws=True,m=True))
+                if dag_parent and c.getAttr(node+'.inheritsTransform') else om.MMatrix())
     parent = om.MMatrix(c.getAttr(node+'.offsetParentMatrix'))*parent
     local = desired*parent.inverse()
     rotation = om.MTransformationMatrix(local).rotation(asQuaternion=True).asMatrix()
@@ -472,6 +479,8 @@ def install():
     """
     import maya.cmds as c
     if c.about(batch=True):return False
+    from . import native_constraints
+    native_constraints.install()
     if c.ls('::*.zeroPartData',objectsOnly=True):
         from . import zero_manual
         zero_manual.install()

@@ -6,7 +6,7 @@ playback are ordinary Maya choice/constraint graphs, with no per-frame writes.
 import json
 import math
 
-VERSION='1.1.0'
+VERSION='1.1.1'
 TR=tuple(p+a for p in ('translate','rotate') for a in 'XYZ')
 if '_callbacks' not in globals():_callbacks={}
 if '_scene_callbacks' not in globals():_scene_callbacks=[]
@@ -44,12 +44,28 @@ def _has_mode(root):
     return any(c.objExists(root+'.'+a) for a in ('armWorldIKData','footSpaceData','upperArmSpaceData','matchedSpaceData','bodyDriveData','chestSpaceData','genericSpaceData'))
 
 
+def _registration(root):
+    """Only live controls own callbacks; copied reference metadata does not."""
+    import maya.cmds as c
+    if not _has_mode(root):return None
+    data=_switch_module(root)._data(root)
+    plug=data.get('global_plug','')
+    node=plug.rsplit('.',1)[0]
+    if not plug or len(c.ls(node,long=True) or [])!=1 or not c.objExists(plug):return None
+    # These records live directly on their mode control. Older native motion
+    # references copied the JSON verbatim, pointing back at the real control.
+    if any(c.objExists(root+'.'+a) for a in ('bodyDriveData','chestSpaceData')):
+        if c.ls(root,uuid=True)!=c.ls(node,uuid=True):return None
+    return data
+
+
 def _sync_mode_cache():
     import maya.cmds as c
     if _busy or _pending:return
     for root,entry in list(_callbacks.items()):
-        if _has_mode(root):
-            entry.update(value=c.getAttr(_switch_module(root)._data(root)['global_plug']),time=c.currentTime(q=True))
+        data=_registration(root)
+        if data:
+            entry.update(value=c.getAttr(data['global_plug']),time=c.currentTime(q=True))
 
 
 def _finish_channel_switch(root):
@@ -384,14 +400,14 @@ def install():
     import maya.api.OpenMaya as om
     import maya.api.OpenMayaAnim as oma
     global _scene_callback_version
-    if _scene_callback_version!=3:
+    if _scene_callback_version!=4:
         for callback in _scene_callbacks:
             try:om.MMessage.removeCallback(callback)
             except RuntimeError:pass
-        _scene_callbacks[:]=[];_scene_callback_version=3
+        _scene_callbacks[:]=[];_scene_callback_version=4
     for root,entry in list(_callbacks.items()):
         handle=entry.get('handle')
-        if not _has_mode(root) or not handle or not handle.isValid() or not handle.isAlive() or entry.get('version')!=3:
+        if not _registration(root) or not handle or not handle.isValid() or not handle.isAlive() or entry.get('version')!=4:
             try:om.MMessage.removeCallback(entry['id'])
             except RuntimeError:pass
             _callbacks.pop(root,None)
@@ -399,10 +415,12 @@ def install():
     roots+=c.ls('::*.chestSpaceData',objectsOnly=True) or []
     roots+=c.ls('::*.genericSpaceData',objectsOnly=True) or []
     for root in dict.fromkeys(roots):
-        if not _has_mode(root) or root in _callbacks:continue
-        data=_switch_module(root)._data(root);node,attr=data['global_plug'].rsplit('.',1)
+        if root in _callbacks:continue
+        data=_registration(root)
+        if not data:continue
+        node,attr=data['global_plug'].rsplit('.',1)
         selection=om.MSelectionList();selection.add(node)
-        entry=dict(value=c.getAttr(data['global_plug']),time=c.currentTime(q=True),handle=om.MObjectHandle(selection.getDependNode(0)),version=3)
+        entry=dict(value=c.getAttr(data['global_plug']),time=c.currentTime(q=True),handle=om.MObjectHandle(selection.getDependNode(0)),version=4)
         def changed(msg,plug,other,client,root=root,attr=attr,entry=entry):
             if not msg&om.MNodeMessage.kAttributeSet or plug.partialName(useLongNames=True)!=attr:return
             if _busy:return

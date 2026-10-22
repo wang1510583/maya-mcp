@@ -1,7 +1,9 @@
 """Independent native-node motion reference; clone curves, never edit source animation."""
 import maya.cmds as c
 
-VERSION='1.0.0'
+VERSION='1.0.1'
+CONTROL_REGISTRATIONS=('bodyDriveData','chestSpaceData','armWorldIKData',
+                       'footSpaceData','upperArmSpaceData','matchedSpaceData','genericSpaceData')
 NATIVE={'orientConstraint','decomposeMatrix','multMatrix','composeMatrix','choice',
         'addDoubleLinear','multDoubleLinear','condition','timeToUnitConversion',
         'unitConversion','inverseMatrix','blendMatrix','reverse','multiplyDivide',
@@ -27,6 +29,12 @@ class Reference:
                 clone=c.duplicate(node,parentOnly=True,inputConnections=False,name=self.namespace+':continuous_refTransform',returnRootsOnly=True)[0]
                 self.created.append(clone)
                 c.parent(clone,self.group,relative=True)
+                # Duplicate native numeric inputs, not animator callback records.
+                # Their JSON contains source-control names, never reference names.
+                for attribute in CONTROL_REGISTRATIONS:
+                    if c.objExists(clone+'.'+attribute):
+                        c.setAttr(clone+'.'+attribute,lock=False)
+                        c.deleteAttr(clone+'.'+attribute)
             else:
                 if c.nodeType(node) not in NATIVE:
                     raise ValueError('身体旋转参考不支持该驱动节点，未修改原动画：'+node+' ('+c.nodeType(node)+')')

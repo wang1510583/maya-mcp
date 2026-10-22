@@ -151,6 +151,11 @@ class IntegratedWindow(QtWidgets.QDialog):
         panel_button=QtWidgets.QPushButton('创建 / 显示模式切换面板',self)
         panel_button.setToolTip('在已创建角色右侧生成场景滑块；选择圆圈后按 W，沿横轴拖动切换。')
         panel_button.clicked.connect(lambda:self.safe(self.create_switch_panel));layout.addWidget(panel_button)
+        external_button=QtWidgets.QPushButton('手臂 / 脚腕外部约束…',self)
+        def open_external():
+            from maya_agent.rigs.external_constraints_ui import show
+            return show()
+        external_button.clicked.connect(lambda:self.safe(open_external));layout.addWidget(external_button)
         bip_button=QtWidgets.QPushButton('导入 Max BIP 动画…',self)
         def open_bip():
             from maya_agent.rigs.bip_retarget_ui import show_ui
@@ -170,7 +175,11 @@ class IntegratedWindow(QtWidgets.QDialog):
     def message(self,text):self.status.setText(text)
     def safe(self,callback):
         try:return callback()
-        except Exception as exc:self.message(str(exc));c.warning(str(exc))
+        except Exception as exc:
+            import traceback
+            text=str(exc).strip() or (type(exc).__name__+'：底层操作未提供错误说明，请查看脚本编辑器中的完整堆栈。')
+            self.last_error=dict(type=type(exc).__name__,message=text,traceback=traceback.format_exc())
+            self.message(text);traceback.print_exc();c.warning(text)
     def add_global_options(self):
         options_row=QtWidgets.QHBoxLayout();self.global_checkboxes={}
         for option,label,tip in (
