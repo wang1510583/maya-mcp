@@ -67,6 +67,14 @@ def export(snapshot_path, graph_path, destination, reference_path):
         except Exception:pass
         c.refresh(force=True)
         c.file(modified=before['modified'])
+    # Capture fresh camera motion and authored curves even when the project predates
+    # camera markers. Re-exporting only animation can upgrade an existing project.
+    camera_shapes=[]
+    for row in snap.get('cameras',[]):
+        found=c.ls(row['id'],long=True) or []
+        if len(found)!=1 or c.nodeType(found[0])!='camera':raise ValueError('工程相机 UUID 不匹配')
+        camera_shapes.append(found[0])
+    camera_rows=runpy.run_path(str(Path(__file__).with_name('export_cameras.py')))['capture'](camera_shapes,start,end)
     after=fp()
     matrix_error=max(abs(a-b) for n,m in matrices.items() for a,b in zip(m,c.xform(n,q=True,ws=True,m=True)))
     edges_after=sorted(c.listConnections(nodes,c=True,p=True,s=True,d=False) or [])
@@ -87,6 +95,10 @@ def export(snapshot_path, graph_path, destination, reference_path):
         'sampling':{'step':1,'sourceTimeUnit':unit,'originalCurveTangentsPreserved':True},
         'keyMarkers':{uid:sorted(times) for uid,times in markers.items()},'sourceCurves':source_curves,'keys':keys,
         'stepControls':step_ids}
+    animation['cameras']=camera_rows
+    animation['cameraCurveVersion']=1
+    animation['cameraTrackVersion']=1
+    animation['cameraTracks']={}
     fixture={'labels':labels,'baseline':baseline,'cases':cases,**report}
     Path(destination).write_text(json.dumps(animation,separators=(',',':'),allow_nan=False),encoding='utf8')
     Path(reference_path).write_text(json.dumps(fixture,separators=(',',':'),allow_nan=False),encoding='utf8')

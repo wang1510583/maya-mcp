@@ -14,7 +14,7 @@ def capture(plug):
         raise ValueError('不能保留非普通动画曲线: ' + plug)
     times = c.keyframe(plug, q=True, tc=True) or []
     result = dict(times=times, values=c.keyframe(plug, q=True, vc=True) or [],
-                  staticValue=c.getAttr(plug))
+                  staticValue=float(c.getAttr(plug)))
     if times:
         result.update({f: c.keyTangent(plug, q=True, **{f: True}) for f in TANGENTS})
         result['weightedTangents'] = bool(c.keyTangent(plug, q=True, weightedTangents=True)[0])

@@ -68,7 +68,7 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
         if current is None or number(fps)<=0: raise ValueError('不支持的帧率')
         # Preserve duration in seconds without changing the user's Maya time unit.
         time_scale=current/number(fps)
-    mode=package.get('valueSpace','local-absolute');base={}
+    mode=package.get('valueSpace','local-absolute');base={};snapshot=None
     if mode=='snapshot-local-delta':
         if not snapshot_path: raise ValueError('增量动画必须提供原始 snapshot_path')
         raw=Path(snapshot_path).read_bytes()
@@ -136,9 +136,18 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
                 drivers=cmds.listConnections(plug,source=True,destination=False) or []
                 if any(cmds.nodeType(n) not in ('animCurveTA','animCurveTL','animCurveTU','animCurveUU','animCurveUL','animCurveUA') for n in drivers): raise ValueError('约束、动画层或其他驱动通道: '+plug)
                 operations.append((plug,frame,value));tangent_modes[plug]='autoease' if uid in smooth else 'linear'
-    if not operations: raise ValueError('没有可导入关键帧')
+    camera_curves,camera_count=runpy.run_path(str(Path(__file__).with_name('camera_animation.py')))['prepare'](package,snapshot,time_scale)
+    for plug,data in camera_curves.items():
+        if plug in tangent_modes:raise ValueError('相机和绑定输入引用同一通道，不能重复写入：'+plug)
+        original_plugs[plug]=data;tangent_modes[plug]='linear'
+        if data['times']:
+            operations.extend((plug,number(t)*time_scale,number(v)) for t,v in zip(data['times'],data['values']))
+        else:
+            static_plugs[plug]=number(data['staticValue']);operations.append((plug,number(package.get('frame',0))*time_scale,number(data['staticValue'])))
+    if not operations and not camera_count: raise ValueError('没有可导入关键帧')
     result={'characterId':cid,'rigVersion':package['rigVersion'],'keys':len(seen),'channelKeys':sum(plug not in static_plugs for plug,_,_ in operations),'controls':sorted(resolved.values()),'dryRun':bool(dry_run),'valueSpace':mode,'interpolation':interpolation,'timeScale':time_scale,'curvePolicy':policy,'originalCurveTracks':len(original_plugs),'staticChannels':len(static_plugs),'legacySampledImport':package.get('curvePayloadVersion')!=1 and bool(package.get('sampling'))}
-    if dry_run: return result
+    result['cameras']=camera_count;result['cameraCurveTracks']=len(camera_curves);result['cameraChannelKeys']=sum(len(d['times']) for d in camera_curves.values())
+    if dry_run or not operations: return result
     if not cmds.undoInfo(q=True,state=True): raise RuntimeError('撤销关闭，无法安全回滚')
     backup={'scene':cmds.file(q=True,sn=True),'package':str(path),'channels':{}}
     for plug in sorted({op[0] for op in operations}):

@@ -46,9 +46,12 @@ def fingerprint():
             'transformsHash': hashlib.sha256(json.dumps([transforms, joints], sort_keys=True).encode()).hexdigest()}
 
 
-def export(root, path):
+def export(root, path, selection=None):
     root = c.ls(root, long=True)[0]
     before = fingerprint()
+    import runpy
+    selection_module=runpy.run_path(str(Path(__file__).with_name('export_selection.py')))
+    scope=selection_module['resolve'](root,selection) if selection is not None else dict(meshes=[],joints=[],cameras=[],selection=[])
     metadata = json.loads(c.getAttr(root + '.integratedRigData'))
     controls, targets, warnings = [], [], []
     definitions=dict(metadata['parts'])
@@ -114,9 +117,11 @@ def export(root, path):
     skins = set()
     for target in target_nodes:
         skins.update(c.listConnections(target, type='skinCluster') or [])
-    if not skins:
-        raise RuntimeError('No skin cluster connected to the registered targets.')
+    character_skins=set(skins)
+    for shape in scope['meshes']:
+        skins.update(c.ls(c.listHistory(shape) or [],type='skinCluster') or [])
     meshes, joint_nodes = [], set()
+    joint_nodes.update(scope['joints'])
     for skin in sorted(skins):
         sel = om.MSelectionList(); sel.add(skin)
         skinfn = oma.MFnSkinCluster(sel.getDependNode(0))
@@ -131,6 +136,7 @@ def export(root, path):
             dp = dag(geometry)
             if dp.apiType() == om.MFn.kTransform:
                 dp.extendToShape()
+            if skin not in character_skins and dp.fullPathName() not in scope['meshes']:continue
             mesh = om.MFnMesh(dp)
             points = [point(p) for p in mesh.getPoints(om.MSpace.kWorld)]
             counts, indices = mesh.getTriangles()
@@ -154,6 +160,8 @@ def export(root, path):
                                         'bindPreMatrix':numbers(c.getAttr(skin+'.bindPreMatrix[%d]' % skinfn.indexForInfluenceObject(i)))} for i in influences],
                                     'weights':sparse},
                            'vertexSpace':'evaluated_world_at_snapshot_frame'})
+    selection_module['append_rigid'](meshes,joint_nodes,scope['meshes'])
+    if not meshes:raise RuntimeError('导出范围内没有模型，请加选需要导出的模型。')
     joints = []
     for n in sorted(joint_nodes):
         parents = c.listRelatives(n, parent=True, fullPath=True) or []
@@ -170,6 +178,7 @@ def export(root, path):
                'frameRange':[c.playbackOptions(q=True,min=True),c.playbackOptions(q=True,max=True)],
                'capabilities':{'snapshot3d':True,'offlineRigSolver':False,'animationRoundTrip':False},
                'controls':controls,'joints':joints,'meshes':meshes,'rigMetadata':metadata,'warnings':warnings}
+    package['exportSelection']=scope
     import runpy
     runpy.run_path(str(Path(__file__).with_name('export_modes.py')))['extend_snapshot'](package)
     after = fingerprint()

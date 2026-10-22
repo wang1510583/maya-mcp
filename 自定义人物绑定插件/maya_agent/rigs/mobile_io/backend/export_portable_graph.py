@@ -252,6 +252,10 @@ def export(snapshot_path,destination):
     modes,aliases=mode_module['compile_modes'](snap,compiler)
     skins={}
     for mesh in snap['meshes']:
+        if mesh.get('rigidTransform'):
+            node=c.ls(mesh['id'],long=True)[0];sel=om.MSelectionList();sel.add(node);fn=om.MFnMesh(sel.getDagPath(0))
+            skins[mesh['id']]={'inputPositions':[[p.x,p.y,p.z] for p in fn.getPoints(om.MSpace.kObject)],'geomMatrix':IDENTITY,'method':0}
+            continue
         skin=mesh['skin']['name']
         source_method=method=c.getAttr(skin+'.skinningMethod')
         if method==2:

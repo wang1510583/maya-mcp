@@ -25,7 +25,7 @@ class ExchangeWindow(QtWidgets.QDialog):
         # Page 1: only the two export operations. The current role is already
         # selected above, so no project file is needed for animation export.
         page=QtWidgets.QWidget();form=QtWidgets.QVBoxLayout(page);self.tabs.addTab(page,'导出')
-        note=QtWidgets.QLabel('当前角色：导出工程文件或动画文件。动画会自动记录当前工程身份。');note.setWordWrap(True);form.addWidget(note)
+        note=QtWidgets.QLabel('导出工程：不选择物体时，导出当前角色的插件绑定和必需蒙皮。有选择时，将所选骨骼、模型、相机追加到默认内容中（选组包含子物体），无需选中绑定。');note.setWordWrap(True);form.addWidget(note)
         self.project_out=QtWidgets.QLineEdit();form.addWidget(self.labeled('工程文件名',self.project_out))
         self.export_button=QtWidgets.QPushButton('导出工程');self.export_button.setStyleSheet('background:#327d81;color:white;font-weight:600;padding:11px');self.export_button.clicked.connect(lambda:self.run(self.perform_export));form.addWidget(self.export_button)
         self.animation_out=QtWidgets.QLineEdit();form.addWidget(self.labeled('动画文件名',self.animation_out))
@@ -100,7 +100,7 @@ class ExchangeWindow(QtWidgets.QDialog):
         box=QtWidgets.QMessageBox(self);box.setWindowTitle('操作成功' if ok else '操作失败');box.setIcon(QtWidgets.QMessageBox.Information if ok else QtWidgets.QMessageBox.Critical);box.setText(text);box.setAttribute(QtCore.Qt.WA_DeleteOnClose);box.open();self._notice=box
     def perform_export(self):
         url,token=self.remote_args()
-        report=service.export_to_server(self.root(),self.project_out.text(),url,token,True,self.start.value(),self.end.value(),self.progress)
+        report=service.export_to_server(self.root(),self.project_out.text(),url,token,True,self.start.value(),self.end.value(),self.progress,selection=c.ls(sl=True,long=True) or [])
         self.perform_remote_list(preferred=report['name']);self.status.setText('工程已上传服务器：'+report['name']+('（部分材质不支持，详见日志）' if (report.get('appearance') or {}).get('warnings') else ''));return report
     def perform_animation_export(self):
         url,token=self.remote_args()
@@ -164,7 +164,25 @@ class ExchangeWindow(QtWidgets.QDialog):
 
 def show():
     global _instance
+    previous=None
     if _instance is not None:
-        try:_instance.show();_instance.raise_();_instance.activateWindow();return _instance
+        try:
+            if type(_instance) is ExchangeWindow:
+                _instance.show();_instance.raise_();_instance.activateWindow();return _instance
+            # A hot reload creates a new class, but existing Qt objects and
+            # their signal callbacks retain the old one. Rebuild that window.
+            if _instance.busy:return _instance
+            previous=dict(geometry=_instance.saveGeometry(),root=_instance.characters.currentData(),
+                          project=_instance.project_out.text(),animation=_instance.animation_out.text(),
+                          start=_instance.start.value(),end=_instance.end.value(),tab=_instance.tabs.currentIndex(),
+                          url=_instance.remote_url.text(),token=_instance.remote_token.text())
+            _instance.close();_instance.deleteLater();_instance=None
         except RuntimeError:pass
-    _instance=ExchangeWindow();_instance.show();return _instance
+    _instance=ExchangeWindow()
+    if previous:
+        _instance.restoreGeometry(previous['geometry']);index=_instance.characters.findData(previous['root'])
+        if index>=0:_instance.characters.setCurrentIndex(index)
+        _instance.project_out.setText(previous['project']);_instance.animation_out.setText(previous['animation'])
+        _instance.start.setValue(previous['start']);_instance.end.setValue(previous['end']);_instance.tabs.setCurrentIndex(previous['tab'])
+        _instance.remote_url.setText(previous['url']);_instance.remote_token.setText(previous['token'])
+    _instance.show();return _instance

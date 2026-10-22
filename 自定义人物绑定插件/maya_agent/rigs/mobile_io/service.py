@@ -18,14 +18,17 @@ def matching_project(row, animation):
             bool(row.get('sourceSnapshotSha256')) and
             all(row.get(k)==animation.get(k) for k in ('characterId','rigVersion','sourceSnapshotSha256')))
 
-def export_to_server(root, name, base, token, project=False, start=None, end=None, progress=lambda text:None, project_name=None):
+def export_to_server(root, name, base, token, project=False, start=None, end=None, progress=lambda text:None, project_name=None, selection=None):
     """Temporary compilation only; exports have no user-managed local destination."""
     name=server_filename(name,project)
+    # Older live Qt windows may still call this without the new keyword after
+    # a module reload. Capture selection before progress/network callbacks.
+    if project and selection is None:selection=c.ls(sl=True,long=True) or []
     rows=network_list(base,token)['files']
     with tempfile.TemporaryDirectory(prefix='maya_server_export_') as directory:
         d=Path(directory);target=d/name
         if project:
-            report=export_project(root,target,False,start,end,progress)
+            report=export_project(root,target,False,start,end,progress,selection=selection)
         else:
             _,uid,meta=identity(root)
             candidates=[r for r in rows if r.get('format')=='maya-mobile-project' and r.get('characterId')==uid and str(r.get('rigVersion'))==str(meta['version'])]
@@ -38,7 +41,8 @@ def export_to_server(root, name, base, token, project=False, start=None, end=Non
             report=export_animation(root,str(baseline),target,progress)
         progress('正在上传服务器…')
         uploaded=network_upload(base,token,target,name)
-        return dict(name=name,server=uploaded,characterId=report.get('characterId'),serverSync=True,appearance=report.get('appearance'))
+        return dict(name=name,server=uploaded,characterId=report.get('characterId'),serverSync=True,appearance=report.get('appearance'),
+                    **{k:report[k] for k in ('meshes','cameras','selection','frameRange') if k in report})
 
 def module(name):return runpy.run_path(str(BACKEND/(name+'.py')))
 
@@ -81,7 +85,7 @@ def find_matching_project(root):
             except Exception:continue
     return max(candidates,key=lambda p:p.stat().st_mtime) if candidates else None
 
-def export_project(root,destination,include_animation=True,start=None,end=None,progress=lambda text:None):
+def export_project(root,destination,include_animation=True,start=None,end=None,progress=lambda text:None,selection=None):
     root,uid,meta=identity(root);target=Path(destination)
     if target.exists():raise ValueError('文件已存在，请更换文件名，保留原工程用于动画回传。')
     if not str(destination).strip():raise ValueError('请选择导出文件位置。')
@@ -91,8 +95,15 @@ def export_project(root,destination,include_animation=True,start=None,end=None,p
     if int(start)!=start or int(end)!=end or not 0<=start<=end<=100000:raise ValueError('动画范围需为 0–100000 内的整数，结束帧不能小于开始帧。')
     with tempfile.TemporaryDirectory(prefix='maya_mobile_') as directory:
         d=Path(directory);snapshot=d/'snapshot.json';debug=d/'graph-debug.json';graph=d/'graph.json';animation=d/'animation.json'
-        progress('1/4 读取角色、手指、通用物件和蒙皮…');report=module('export_snapshot')['export'](root,str(snapshot))
+        progress('1/4 读取角色及选择的骨骼、模型、相机…');report=module('export_snapshot')['export'](root,str(snapshot),selection=selection)
         snap=json.loads(snapshot.read_text('utf8'));snap['frameRange']=[int(start),int(end)]
+        before=module('export_snapshot')['fingerprint']()
+        camera_nodes=(c.ls(type='transform',long=True) or [])+(c.ls(type='joint',long=True) or [])
+        camera_matrices={n:c.xform(n,q=True,ws=True,m=True) for n in camera_nodes}
+        snap['cameras']=module('export_cameras')['capture'](snap.get('exportSelection',{}).get('cameras',[]),int(start),int(end))
+        after=module('export_snapshot')['fingerprint']()
+        camera_restore_error=max((abs(a-b) for n,m in camera_matrices.items() for a,b in zip(m,c.xform(n,q=True,ws=True,m=True))),default=0.)
+        if any(before[k]!=after[k] for k in before if k!='transformsHash') or camera_restore_error>1e-8:raise RuntimeError('相机采样后场景恢复核对失败，未生成工程。')
         snapshot.write_text(json.dumps(snap,ensure_ascii=False,separators=(',',':'),allow_nan=False),'utf8')
         progress('2/4 编译手机离线求解与模式切换…');compiler=module('export_portable_graph');compile_report=compiler['export'](str(snapshot),str(debug));compiler['compact'](str(debug),str(graph))
         if include_animation:
@@ -100,7 +111,7 @@ def export_project(root,destination,include_animation=True,start=None,end=None,p
         else:animation_report=None
         progress('4/4 生成手机工程文件…');compiler['package_snapshot'](str(snapshot),str(graph),str(d/'package.json'),str(animation) if include_animation else None)
         write_new(d/'package.json',target)
-        return dict(path=str(target),characterId=uid,rigVersion=meta['version'],controls=report['visibleControls'],meshes=report['meshes'],frameRange=[start,end],animation=animation_report,bytes=target.stat().st_size,appearance=compile_report.get('appearance'))
+        return dict(path=str(target),characterId=uid,rigVersion=meta['version'],controls=report['visibleControls'],meshes=report['meshes'],cameras=len(snap['cameras']),selection=snap.get('exportSelection'),frameRange=[start,end],animation=animation_report,bytes=target.stat().st_size,appearance=compile_report.get('appearance'))
 
 def export_animation(root,project_path,destination,progress=lambda text:None):
     if Path(destination).exists():raise ValueError('动画文件已存在，请更换文件名。')

@@ -2,6 +2,8 @@
 import ast
 import hashlib
 import json
+import subprocess
+import sys
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 
@@ -12,6 +14,16 @@ DESTINATION = ROOT / '自定义人物绑定插件'
 def build():
     if not (DESTINATION / '安装插件.py').is_file():
         raise FileNotFoundError('Missing canonical standalone rig directory')
+    # Exercise the bundled loader before replacing the manifest or archive.
+    # Syntax validation alone cannot detect mismatched code/recipe versions.
+    subprocess.run([
+        sys.executable, '-c',
+        'import sys; sys.path.insert(0, sys.argv[1]); '
+        'from maya_agent.rigs.custom_body.definition import load_definition; '
+        '[load_definition(n, preserve_four=p) '
+        'for n in (2, 4, 8, 64) for p in (True, False)]',
+        str(DESTINATION),
+    ], check=True)
     records = []
     for path in sorted(DESTINATION.rglob('*')):
         if not path.is_file() or '__pycache__' in path.parts or path.name == 'manifest.json':

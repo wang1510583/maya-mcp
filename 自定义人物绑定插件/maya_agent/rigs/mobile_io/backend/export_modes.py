@@ -56,6 +56,13 @@ def extend_snapshot(snap):
         plugs=control.get('inputPlugs') or [control['path']+'.'+a for a in TR]
         registered.update(canonical(p) for p in plugs if p)
     nodes=[r['path'] for r in snap['controls']+snap.get('joints',[])]
+    # Explicit extra models/bones also need their animated transform ancestors.
+    for original in list(nodes):
+        node=original
+        while True:
+            parents=c.listRelatives(node,p=True,fullPath=True) or []
+            if not parents:break
+            node=parents[0];nodes.append(node)
     for part in metadata['parts'].values():
         if part.get('root'):
             nodes.extend(c.listRelatives(part['root'],ad=True,fullPath=True,type='transform') or [])

@@ -200,7 +200,7 @@
     {
       "path": "maya_agent/rigs/custom_body/data/body_v7.json",
       "bytes": 1261,
-      "sha256": "6d3a4ee81dd01511b2e9d8fdc21936a5c04cba999f5202c15fd35f7c7e8dd861"
+      "sha256": "b2d2abdd411ee96e09d4a03df46e700f2cdceed54efc03e8c14d5abb50133a95"
     },
     {
       "path": "maya_agent/rigs/custom_body/definition.py",
@@ -420,17 +420,27 @@
     {
       "path": "maya_agent/rigs/mobile_io/__init__.py",
       "bytes": 169,
-      "sha256": "f01a01c3fb3f2775c0455f013f6a97c6d9dc6d823551845a0785db6d97bbe824"
+      "sha256": "a4e2c25948887f02b195e57ffa7b873e4782874cedd0c2b2be6672a3528abfa9"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/animation_curves.py",
-      "bytes": 8273,
-      "sha256": "d62a44f060f91b0cb03fca5b6db635c0556c5f46e2bed6e1580136a39d287b12"
+      "bytes": 8280,
+      "sha256": "74693d7c5adf10c4adcf0763bb3a3f98820b22d333627163f1933372e303a2fd"
+    },
+    {
+      "path": "maya_agent/rigs/mobile_io/backend/camera_animation.py",
+      "bytes": 12581,
+      "sha256": "315f30965c8c6ecf8e776db2708098f1952bb35133cd1531612d1158f77e45e5"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_animation.py",
-      "bytes": 6120,
-      "sha256": "84d611edf62c2ab4562c6e6e6041686e6449f589727f638cd71337f926b50372"
+      "bytes": 6910,
+      "sha256": "21052b30417947daf6e5ee1bdbcf42b4aa6bdb83bcebfa31cd79583fe4186b8d"
+    },
+    {
+      "path": "maya_agent/rigs/mobile_io/backend/export_cameras.py",
+      "bytes": 2989,
+      "sha256": "73799968e4ad987df4ba5a1f5fa3de8cd8b74982329bcc3e211455863012f584"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_mesh_appearance.py",
@@ -444,28 +454,33 @@
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_modes.py",
-      "bytes": 10584,
-      "sha256": "8e28b9a99c27fa075a6ac091c2d8fde748f07974ff5aebae1c4c5944d2dc9473"
+      "bytes": 10888,
+      "sha256": "6a68fc5215b6be4340742a16cfa27db7e50f416106387f1f87220543c1f147e9"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_portable_graph.py",
-      "bytes": 23945,
-      "sha256": "2fc56e4254b567d3ebdb370663ae7c81da85c9f0f9b23d41b8957ce839209958"
+      "bytes": 24266,
+      "sha256": "f5ed82ef31db21d39082f01e2d68de77fa4916647e7e585298b587b5d4d6cbeb"
+    },
+    {
+      "path": "maya_agent/rigs/mobile_io/backend/export_selection.py",
+      "bytes": 3330,
+      "sha256": "f3c44fc7f40453c160acfc1f3a3edd3b49e9752fbfc46f2fa3b906e8cf218ecb"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_snapshot.py",
-      "bytes": 10048,
-      "sha256": "b327a9b7c7c1ce29a54ce367ede4296740779993ce2becad30f522e04355610d"
+      "bytes": 10700,
+      "sha256": "17de9079cd090b7f38a1ca284396b65004435aaf1c8c673e3e8467b424307019"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/mobile_animation_io.py",
-      "bytes": 13457,
-      "sha256": "142d9c7c66e2282761abc35a9dbe9f5110c5b0bb0900e35efe583890ce470042"
+      "bytes": 14360,
+      "sha256": "88ae944eda3f936d53ab301af43745b863930d87b35325c67ffe151d33648b15"
     },
     {
       "path": "maya_agent/rigs/mobile_io/README.md",
-      "bytes": 6984,
-      "sha256": "d89b56a151b540c5c4966b781602a5e22440b7c815441f8cecdd823f365fb5ac"
+      "bytes": 12839,
+      "sha256": "4dd40bbd08c30fdadd023f059a81fb6a7ad41cdbd0e7cba4a1c8037162589321"
     },
     {
       "path": "maya_agent/rigs/mobile_io/server/maya_mobile_exchange_server.py",
@@ -479,13 +494,13 @@
     },
     {
       "path": "maya_agent/rigs/mobile_io/service.py",
-      "bytes": 12777,
-      "sha256": "b5df888de29e4ce9dcb62f790923abb8d292f1a9627a701ce10c5d1657e5e58f"
+      "bytes": 14023,
+      "sha256": "456d93658a80174bc650b7e2cd8c4fb111a6da41e6944b446d977a884b3e285c"
     },
     {
       "path": "maya_agent/rigs/mobile_io/ui.py",
-      "bytes": 16417,
-      "sha256": "b9edaec99f0ca2fd4dbeace8301885ad6190950cd09ee4c5658631f93569fb8e"
+      "bytes": 17918,
+      "sha256": "b0e199f25ab7490f9a6c0daf1caa01fee54efea03057a7ebb6f5622a1dd0f646"
     },
     {
       "path": "maya_agent/rigs/runtime_plugin.py",
