@@ -30,7 +30,7 @@ def curves_for_plug(plug,registered=None):
     return curves
 
 
-def edit_layer(roots=()):
+def edit_layer(roots=(),extra_plugs=()):
     """Honor the layer editor's selected/preferred layer, including BaseAnimation."""
     import maya.cmds as c
     import json
@@ -38,6 +38,7 @@ def edit_layer(roots=()):
     if len(layers)<2:return None
     if roots:
         plugs=[e['proxy'] for root in roots if c.objExists(root+'.liveAlignmentData') for e in json.loads(c.getAttr(root+'.liveAlignmentData'))['entries']]
+        plugs.extend(extra_plugs)
         from . import arm_ik_shared,arm_ik
         for root in roots:
             if arm_ik_shared.active(root):

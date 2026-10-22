@@ -202,6 +202,12 @@ def update(entry,force=False,_restore_display=True):
         return
     entry['last_native']=native
     entry['changed']=max(abs(a-b) for a,b in zip(native,entry['native_start']))>1e-8
+    if entry.get('foot_move'):
+        from . import foot_translation
+        try:foot_translation.update(entry,native)
+        finally:
+            if _restore_display:restore_display(entry)
+        return
     local=om.MTransformationMatrix(entry['local'])
     local.setTranslation(om.MVector(*native[:3]),om.MSpace.kTransform)
     local.setRotation(om.MEulerRotation(*[math.radians(v) for v in native[3:]],c.getAttr(proxy+'.rotateOrder')))

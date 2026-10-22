@@ -292,9 +292,9 @@ def before_drag(context):
     c.undoInfo(openChunk=True,chunkName='LiveLimbTransform')
     _gesture={'snapshots':[],'prepared':{},'auto':c.autoKeyframe(q=True,state=True),'rotation_layers':[], 'arm_gestures':[]}
     try:
-        from . import live_arm_manual
+        from . import live_arm_manual,foot_translation
         from .live_layers import edit_layer
-        _gesture['anim_layer']=edit_layer(roots)
+        _gesture['anim_layer']=edit_layer(roots,extra_plugs=foot_translation.key_plugs(generic))
         if _gesture['anim_layer']:c.autoKeyframe(state=False)
         _fence('before',_gesture['snapshots'])
         for root in roots:
@@ -310,9 +310,12 @@ def before_drag(context):
             snapshot=prepare(root)
             _gesture['snapshots'].append(snapshot)
             _gesture['prepared'].update({p:c.getAttr(p) for p in snapshot[0]})
+        # A co-selected ankle owns its input before roll handles share it.
+        generic.sort(key=lambda n:json.loads(c.getAttr(n+'.zeroChannelData'))['role']!='foot')
+        translation_routes={}
         for control in generic:
             c.autoKeyframe(state=False)
-            entry=zero_channels.begin(control);snapshot=entry['snapshot']
+            entry=zero_channels.begin(control,translation_routes=translation_routes);snapshot=entry['snapshot']
             _gesture['arm_gestures'].append(entry);_gesture['snapshots'].append(snapshot)
             _gesture['prepared'].update(snapshot[0])
         # Wrist-only and world-IK gestures do not normally snapshot the FK pole.

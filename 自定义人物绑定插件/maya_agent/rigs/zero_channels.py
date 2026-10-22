@@ -207,7 +207,7 @@ def selected_generic():
     return result
 
 
-def begin(control):
+def begin(control, translation_routes=None):
     import maya.cmds as c
     import maya.api.OpenMaya as om
     from . import live_edit,live_arm_manual
@@ -249,6 +249,8 @@ def begin(control):
         # Source values are intentionally isolated until reconnect; bypass the
         # normal source-to-surface destination lookup while solving this drag.
         entry['destinations']={source+'.'+a:(source if a in d['offsets'] else control)+'.'+a for a in TR}
+        from . import foot_translation
+        foot_translation.attach(entry,d,translation_routes if translation_routes is not None else {})
         live_arm_manual.prepare_native_sample(entry,suspend=False)
         return entry
     except Exception:
