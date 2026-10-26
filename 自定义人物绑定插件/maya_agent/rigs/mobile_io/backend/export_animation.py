@@ -14,6 +14,11 @@ def export(snapshot_path, graph_path, destination, reference_path):
     raw=Path(snapshot_path).read_bytes();snap=json.loads(raw.decode('utf8'))
     graph=json.loads(Path(graph_path).read_text(encoding='utf8'))
     assert graph['sourceSnapshotSha256']==hashlib.sha256(raw).hexdigest()
+    for row in snap.get('controls',[]):
+        if not row.get('inputOnly') and 'rotateOrder' in row:
+            nodes=c.ls(row['id'],long=True) or []
+            if len(nodes)!=1 or c.getAttr(nodes[0]+'.rotateOrder')!=row['rotateOrder']:
+                raise ValueError('控制器旋转顺序与工程不一致，请重新导出工程：'+row.get('name',row['id']))
     for path in (destination,reference_path):
         if Path(path).exists():raise FileExistsError(str(path))
     fp=runpy.run_path(str(Path(__file__).with_name('export_snapshot.py')))['fingerprint']

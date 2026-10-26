@@ -78,6 +78,11 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
             snapshot=json.loads(raw.decode('utf-8-sig'))
         if hashlib.sha256(raw).hexdigest()!=package.get('sourceSnapshotSha256'): raise ValueError('源快照 SHA256 不匹配')
         if snapshot.get('characterId')!=cid or snapshot.get('rigVersion')!=package.get('rigVersion'): raise ValueError('源工程身份不匹配')
+        for row in snapshot.get('controls',[]):
+            if not row.get('inputOnly') and 'rotateOrder' in row:
+                node=resolve(row['id'])
+                if cmds.getAttr(node+'.rotateOrder')!=row['rotateOrder']:
+                    raise ValueError('控制器旋转顺序已改变，请重新导出工程和匹配动画后再编辑：'+node)
         base={c['id']:{a:number(c['channels'][a]['value']) for a in ATTRS if a in c.get('channels',{})} for c in snapshot['controls']}
     elif mode!='local-absolute': raise ValueError('未知通道坐标模式')
     interpolation=package.get('interpolation','linear')
@@ -90,7 +95,7 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
     curve_io=runpy.run_path(str(Path(__file__).with_name('animation_curves.py')))
     import_rows,source_specs,static_channels=curve_io['prepare'](package,base)
     tangent_modes={};replace_plugs=set();original_plugs={};static_plugs={}
-    resolved={};operations=[];seen=set()
+    resolved={};operations=[];seen=set();validated_readonly=set()
     for row in import_rows:
         frame=number(row['frame'])*time_scale
         for uid,pose in row.get('values',{}).items():
@@ -123,6 +128,17 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
                 plug=bindings[uid]['inputPlugs'][ATTRS.index(attr)] if uid in bindings else node+'.'+attr
                 if not plug:raise ValueError('未登记的内部输入通道: '+uid+'.'+attr)
                 if uid in mode_ids and value not in (0,1):raise ValueError('模式关键帧必须为 0 或 1')
+                if source_animation and cmds.getAttr(plug,lock=True):
+                    # Locked baked reference curves are playback inputs, never
+                    # writable phone controls. Verify provenance then leave them.
+                    spec=source_specs.get((uid,attr))
+                    if uid in smooth or spec is None:raise ValueError('不能编辑锁定的内部参考动画：'+plug)
+                    if plug not in validated_readonly:
+                        current=curve_io['capture'](plug)
+                        fields=[k for k in spec if k!='staticValue' or not spec['times']]
+                        if any(current.get(k)!=spec[k] for k in fields):raise ValueError('内部参考动画已改变，请重新导出工程：'+plug)
+                        validated_readonly.add(plug)
+                    continue
                 if cmds.getAttr(plug,lock=True) or cmds.referenceQuery(node,isNodeReferenced=True): raise ValueError('锁定通道或引用节点: '+plug)
                 drivers=cmds.listConnections(plug,source=True,destination=False) or []
                 if any(cmds.nodeType(n) not in ('animCurveTA','animCurveTL','animCurveTU') for n in drivers): raise ValueError('约束、动画层或其他驱动通道: '+plug)
@@ -195,5 +211,11 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
         raise
     else: cmds.undoInfo(closeChunk=True)
     finally:arm_ik._busy=previous_busy;arm_ik._sync_mode_cache()
+    # Rebuilding time curves can leave point-constraint outputs cached until a
+    # viewport refresh. Invalidate once at import completion, never per frame.
+    cmds.evaluationManager(invalidate=True)
+    cmds.dgdirty(allPlugs=True)
+    cmds.currentTime(before_time,update=True)
+    cmds.refresh(force=True)
     result['backup']=str(backup_path)
     return result

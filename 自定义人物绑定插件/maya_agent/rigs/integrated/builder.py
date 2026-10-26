@@ -202,8 +202,8 @@ def validate_follow(node,data,label):
 
 
 def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,hips_follow=None,zero_controls=False,create_master=True,pose_tolerance=1e-4):
-    if isinstance(pose_tolerance,bool) or not isinstance(pose_tolerance,(int,float)) or not math.isfinite(pose_tolerance) or not 1e-8<=pose_tolerance<=1:
-        raise ValueError('核对容差必须是 0.00000001 到 1 之间的有限数值。')
+    if isinstance(pose_tolerance,bool) or not isinstance(pose_tolerance,(int,float)) or not math.isfinite(pose_tolerance) or pose_tolerance<1e-8:
+        raise ValueError('核对容差必须是大于或等于 0.00000001 的有限数值。')
     import maya.cmds as c
     from maya_agent.rigs.runtime_plugin import ensure_undo_command
     ensure_undo_command()

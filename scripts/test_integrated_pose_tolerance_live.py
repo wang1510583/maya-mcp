@@ -15,12 +15,12 @@ def verify():
     rows=[]
     try:
         c.autoKeyframe(state=False)
-        for invalid in (0,-1,float('nan'),float('inf'),True,'0.001',2):
+        for invalid in (0,-1,float('nan'),float('inf'),True,'0.001',1e-9):
             try:integrated.build({},pose_tolerance=invalid)
             except ValueError as exc:assert '核对容差' in str(exc)
             else:raise AssertionError('Invalid tolerance accepted: '+repr(invalid))
         assert set(c.ls(long=True))==before
-        for stage,tolerance in (('normal',None),('assembly',None),('assembly',.001),('zero',None),('zero',.001)):
+        for stage,tolerance,offset in (('normal',None,.0002),('assembly',None,.0002),('assembly',.001,.0002),('zero',None,.0002),('zero',.001,.0002),('assembly',1,1.0434503756331615),('assembly',2,1.0434503756331615),('zero',2,1.0434503756331615),('normal',1e100,.0002)):
             prefix='_poseTolerance_'+uuid.uuid4().hex[:7];rig=None
             target=c.createNode('transform',name=prefix+'_target')
             for f,v in ((0,10),(1,11)):c.setKeyframe(target,at='translateX',t=f,v=v)
@@ -28,7 +28,7 @@ def verify():
             edge=c.connectionInfo(target+'.translateX',sfd=True)
             curve=edge.split('.')[0];keys=(c.keyframe(curve,q=True,tc=True),c.keyframe(curve,q=True,vc=True))
             fixture=set(c.ls(long=True));constraint_name=prefix+':shoulder_R_target1'
-            def perturb():c.setAttr(constraint_name+'.target[0].targetOffsetTranslateX',.0002)
+            def perturb():c.setAttr(constraint_name+'.target[0].targetOffsetTranslateX',offset)
             def constrained(*args,**kwargs):
                 result=original_constraint(*args,**kwargs)
                 if stage=='assembly' and kwargs.get('name')==constraint_name:perturb()
@@ -39,7 +39,7 @@ def verify():
                 return result
             c.parentConstraint=constrained;zero_channels.build=zeroed
             kwargs={} if tolerance is None else dict(pose_tolerance=tolerance)
-            expected_pass=stage=='normal' or tolerance is not None
+            expected_pass=stage=='normal' or (tolerance is not None and tolerance>=offset)
             try:
                 try:
                     rig=integrated.build({'shoulder_R':dict(targets=[target],copy_animation=True,start_frame=0,end_frame=1)},
@@ -57,7 +57,7 @@ def verify():
                     assert expected_pass
                     stored=json.loads(c.getAttr(rig['root']+'.integratedRigData'))
                     assert stored['pose_tolerance']==(1e-4 if tolerance is None else tolerance)
-                    if stage!='normal':assert abs(stored['max_world_error']-.0002)<1e-8
+                    if stage!='normal':assert abs(stored['max_world_error']-offset)<1e-8
                     rows.append(dict(stage=stage,accepted=True,tolerance=stored['pose_tolerance'],error=stored['max_world_error']))
             finally:
                 c.parentConstraint=original_constraint;zero_channels.build=original_zero

@@ -1,5 +1,6 @@
 """Independent part panel: left-load, right-settings, middle-clear."""
 from PySide2 import QtCore,QtWidgets
+import sys
 import maya.cmds as c
 from . import PARTS,VERSION
 
@@ -193,10 +194,11 @@ class IntegratedWindow(QtWidgets.QDialog):
         self.layout().insertLayout(self.layout().indexOf(self.diagram)+1,options_row)
         tolerance_row=QtWidgets.QHBoxLayout();tolerance_row.addWidget(QtWidgets.QLabel('核对容差'))
         self.pose_tolerance=QtWidgets.QDoubleSpinBox(self)
-        self.pose_tolerance.setDecimals(8);self.pose_tolerance.setRange(1e-8,1.0)
+        self.pose_tolerance.setDecimals(8);self.pose_tolerance.setRange(1e-8,sys.float_info.max)
+        self.pose_tolerance.setMaximumWidth(180)
         self.pose_tolerance.setSingleStep(.0001);self.pose_tolerance.setKeyboardTracking(False)
         self.pose_tolerance.setValue(_global_options['pose_tolerance'])
-        self.pose_tolerance.setToolTip('默认 0.0001。用于集成装配及零位控制器的最终世界矩阵误差核对，数值不是厘米。\n调大只允许更大偏差，不修正求解；部位内部 IK、输入和动画保护检查仍保留。')
+        self.pose_tolerance.setToolTip('默认 0.0001，最小 0.00000001，无人为上限（须为有限数值）。用于集成装配及零位控制器的最终世界矩阵误差核对，数值不是厘米。\n调大只允许更大偏差，不修正求解；部位内部 IK、输入和动画保护检查仍保留。')
         self.pose_tolerance.valueChanged.connect(lambda value:_global_options.update(pose_tolerance=value))
         tolerance_row.addWidget(self.pose_tolerance,1)
         reset=QtWidgets.QPushButton('恢复默认',self);reset.clicked.connect(lambda:self.pose_tolerance.setValue(1e-4))

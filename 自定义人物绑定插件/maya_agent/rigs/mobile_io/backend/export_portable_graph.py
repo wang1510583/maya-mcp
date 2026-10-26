@@ -12,7 +12,7 @@ IDENTITY=[1.,0,0,0,0,1.,0,0,0,0,1.,0,0,0,0,1.]
 
 class Compiler:
     def __init__(self, snapshot):
-        self.ops=[]; self.cache={}; self.active=[]; self.inputs={}; self.plugs={}; self.types={}
+        self.ops=[]; self.cache={}; self.active=[]; self.inputs={}; self.plugs={}; self.types={}; self.readonly_inputs=set()
         for control in snapshot['controls']:
             node=c.ls(control.get('nodeId',control['id']),long=True)[0]
             for i,a in enumerate(['rotateX','rotateY','rotateZ','translateX','translateY','translateZ']):
@@ -25,8 +25,9 @@ class Compiler:
                 animated=False
                 if source is not None:
                     animated=om.MFnDependencyNode(source.node()).typeName in ('animCurveTA','animCurveTL','animCurveTT','animCurveTU')
-                if (not p.isDestination or animated) and not p.isLocked:
+                if (not p.isDestination or animated) and (not p.isLocked or control.get('sourceAnimation')):
                     self.inputs[self.name(p)]=(control['id'],i)
+                    if p.isLocked:self.readonly_inputs.add(self.name(p))
 
     def name(self,p):
         fn=om.MFnDependencyNode(p.node())
@@ -248,6 +249,15 @@ def export(snapshot_path,destination):
         frame=dict(id=uid,world=compiler.get(source+'.worldMatrix[0]'),local=compiler.get(source+'.matrix'),
                    parent=compiler.get(source+'.parentMatrix[0]'),editable=mask)
         native_control_gestures[uid]=dict(kind='zero',frame=frame,bodyRotation=data['part']=='body')
+    # Interaction metadata is separate from the solver graph: a roll handle's
+    # translation is authored on its own ankle, while rotation stays on the handle.
+    feet={r['part']:r['id'] for r in snap['controls'] if r['part'].startswith('leg_') and r['role']=='foot'}
+    for row in snap['controls']:
+        if row['part'] in feet and row['role'] in ('heel','toe_end','ball'):
+            uid=row['id'];foot=feet[row['part']]
+            if uid in native_control_gestures and foot in native_control_gestures:
+                native_control_gestures[uid]['translationTarget']=foot
+                native_control_gestures[foot]['translationOnly']=True
     mode_module=runpy.run_path(str(Path(__file__).with_name('export_modes.py')))
     modes,aliases=mode_module['compile_modes'](snap,compiler)
     skins={}
@@ -271,11 +281,12 @@ def export(snapshot_path,destination):
         if c.getAttr(skin+'.envelope')!=1 or c.getAttr(skin+'.useComponents'):raise ValueError('Unsupported skin envelope or component mode: '+skin)
         p=compiler.plug(skin+'.input[0].inputGeometry');fn=om.MFnMesh(p.asMObject())
         geom=list(om.MFnMatrixData(compiler.plug(skin+'.geomMatrix').asMObject()).matrix())
-        skins[mesh['id']]={'inputPositions':[[v.x,v.y,v.z] for v in fn.getPoints(om.MSpace.kObject)],'geomMatrix':geom,'method':method,'sourceMethod':source_method}
+        shape=c.ls(mesh['id'],long=True)[0];transform=c.listRelatives(shape,parent=True,fullPath=True)[0]
+        skins[mesh['id']]={'inputPositions':[[v.x,v.y,v.z] for v in fn.getPoints(om.MSpace.kObject)],'geomMatrix':geom,'geomMatrixOp':compiler.get(skin+'.geomMatrix'),'geometryWorldOp':compiler.get(transform+'.worldMatrix[0]'),'method':method,'sourceMethod':source_method}
     result={'format':'maya-portable-graph','version':1,'sourceSnapshotSha256':hashlib.sha256(snapshot_source.read_bytes()).hexdigest(),
             'characterId':snap['characterId'],'rigVersion':snap['rigVersion'],'sourceFrame':snap['sourceFrame'],
             'ops':compiler.ops,'outputs':outputs,'nativeArmGestures':native_arm_gestures,'nativeArmGestureVersion':3,'nativeControlGestures':native_control_gestures,'skins':skins,'editableInputs':{k:list(v) for k,v in compiler.inputs.items()}}
-    result['modePanel']=modes;result['ikAliases']=aliases
+    result['modePanel']=modes;result['ikAliases']=aliases;result['footTranslationVersion']=1
     metadata=runpy.run_path(str(Path(__file__).with_name('export_mesh_shading.py')))['mesh_metadata']
     shading={}
     for mesh in snap['meshes']:
@@ -307,6 +318,9 @@ def compact(source,destination):
         cfg['guards']=[visit(i) for i in cfg['guards']]
     for cfg in graph.get('nativeControlGestures',{}).values():
         for key in ('world','local','parent'):cfg['frame'][key]=visit(cfg['frame'][key])
+    for skin in graph.get('skins',{}).values():
+        if 'geomMatrixOp' in skin:skin['geomMatrixOp']=visit(skin['geomMatrixOp'])
+        if 'geometryWorldOp' in skin:skin['geometryWorldOp']=visit(skin['geometryWorldOp'])
     runpy.run_path(str(Path(__file__).with_name('export_modes.py')))['remap_modes'](graph,visit)
     graph['ops']=ops
     Path(destination).write_text(json.dumps(graph,separators=(',',':'),allow_nan=False),encoding='utf8')

@@ -79,7 +79,12 @@ def extend_snapshot(snap):
     history=(c.listHistory(nodes) or []) if nodes else []
     for node in sorted(set(nodes+history)):
         if c.nodeType(node) not in ('joint','transform'):continue
-        for attr in TR+('scaleX','scaleY','scaleZ'):
+        # Position/animation offsets on heads and limbs are authored custom
+        # scalars too. Keeping only TR/scale freezes these at the export frame.
+        attrs=set(TR+('scaleX','scaleY','scaleZ'))
+        attrs.update(c.listAttr(node,keyable=True,scalar=True) or [])
+        attrs.update(c.listAttr(node,userDefined=True,scalar=True) or [])
+        for attr in sorted(attrs):
             plug=canonical(node+'.'+attr)
             if plug in registered:continue
             source=c.connectionInfo(plug,sfd=True)
@@ -97,6 +102,7 @@ def compile_modes(snap,cc):
     def get(n,a):return cc.get(n+'.'+a)
     def input_ref(plug):
         name=cc.name(cc.plug(editable_plug(plug)))
+        if name in cc.readonly_inputs:return None
         if name in cc.inputs:return cc.inputs[name]
         # Live surface channels can be proxies of the registered zero control.
         p=cc.plug(editable_plug(plug))
@@ -104,6 +110,7 @@ def compile_modes(snap,cc):
             if not p.isDestination:break
             p=p.source()
             name=cc.name(p)
+            if name in cc.readonly_inputs:return None
             if name in cc.inputs:return cc.inputs[name]
         return None
     def frame(node,uid=None):
