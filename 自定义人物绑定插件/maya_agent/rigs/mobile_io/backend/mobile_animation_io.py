@@ -9,10 +9,30 @@ import maya.cmds as cmds
 ATTRS = ('rotateX','rotateY','rotateZ','translateX','translateY','translateZ')
 ATTR_NAME = __import__('re').compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
 
-def number(v):
+def number(v, context=''):
     if isinstance(v,bool) or not isinstance(v,(float,int)) or not math.isfinite(v):
-        raise ValueError('无效通道数值')
+        raise ValueError('无效通道数值'+('：'+context if context else '')+' = '+repr(v))
     return float(v)
+
+def snapshot_base(snapshot, bindings):
+    """Read old bool baselines only for independently registered Maya bool plugs.
+
+    Leave the original snapshot bytes intact: the Android animation references
+    their SHA256. Never accept booleans in actual rotation/translation channels.
+    """
+    result={}
+    for row in snapshot['controls']:
+        uid=row['id'];values={};binding=bindings.get(uid,{})
+        for axis,attr in enumerate(ATTRS):
+            if attr not in row.get('channels',{}):continue
+            value=row['channels'][attr]['value']
+            if isinstance(value,bool) and row.get('inputOnly'):
+                plugs=binding.get('inputPlugs',[])
+                plug=plugs[axis] if axis<len(plugs) else None
+                if plug and cmds.getAttr(plug,type=True)=='bool':value=float(value)
+            values[attr]=number(value,'工程基准 '+row.get('name',uid)+'.'+attr+' ['+uid+']')
+        result[uid]=values
+    return result
 
 def resolve(uid):
     try:
@@ -83,7 +103,7 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
                 node=resolve(row['id'])
                 if cmds.getAttr(node+'.rotateOrder')!=row['rotateOrder']:
                     raise ValueError('控制器旋转顺序已改变，请重新导出工程和匹配动画后再编辑：'+node)
-        base={c['id']:{a:number(c['channels'][a]['value']) for a in ATTRS if a in c.get('channels',{})} for c in snapshot['controls']}
+        base=snapshot_base(snapshot,bindings)
     elif mode!='local-absolute': raise ValueError('未知通道坐标模式')
     interpolation=package.get('interpolation','linear')
     if interpolation not in ('linear','maya-auto-ease'): raise ValueError('不支持的动画插值')
@@ -97,7 +117,7 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
     tangent_modes={};replace_plugs=set();original_plugs={};static_plugs={}
     resolved={};operations=[];seen=set();validated_readonly=set()
     for row in import_rows:
-        frame=number(row['frame'])*time_scale
+        frame=number(row['frame'],'关键帧时间')*time_scale
         for uid,pose in row.get('values',{}).items():
             if (uid,frame) in seen: raise ValueError('同一控制器关键帧重复')
             seen.add((uid,frame));node=resolved.setdefault(uid,resolve(bindings[uid]['nodeId'] if uid in bindings else uid))
@@ -106,7 +126,7 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
             attributes={}
             if not isinstance(pose,dict): channels={'rotateY':number(pose)}
             else:
-                channels={a:number(pose[a]) for a in ATTRS if a in pose}
+                channels={a:number(pose[a],'%s.%s 帧 %s'%(uid,a,row['frame'])) for a in ATTRS if a in pose}
                 if 'translate' in pose:
                     if any(a in pose for a in ATTRS[3:]): raise ValueError('平移通道不能同时使用数组和独立属性')
                     tr=pose['translate']

@@ -435,7 +435,7 @@
     {
       "path": "maya_agent/rigs/mobile_io/__init__.py",
       "bytes": 169,
-      "sha256": "e8fecfcb7b7fdbd4378b8cef5bca75ea645fa32e306cba218a3053d9c6b7e69d"
+      "sha256": "f08aa5520f3f8a6d01a981298145b9fda8d0afd6120cc206489dd72e1c321a2c"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/animation_curves.py",
@@ -469,8 +469,8 @@
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_modes.py",
-      "bytes": 11325,
-      "sha256": "7682f33e81047a4b4c53061045d6a447990c3bc9d3390cef15b6f11add7a4d86"
+      "bytes": 11715,
+      "sha256": "ebd41d5f5501b5359aa3d63f4e96983eabea1c0c895a150a7f4e132e755168a2"
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/export_portable_graph.py",
@@ -489,13 +489,13 @@
     },
     {
       "path": "maya_agent/rigs/mobile_io/backend/mobile_animation_io.py",
-      "bytes": 15917,
-      "sha256": "02c5c35d142237b5c288b0cad476e7a56300dfc8f0362c3538b158f9fe1a894a"
+      "bytes": 16920,
+      "sha256": "b1553fe5e08fc52bed66ea40e5e8c928cb8fc8df4ec35bd3446ddcbc0639928c"
     },
     {
       "path": "maya_agent/rigs/mobile_io/README.md",
-      "bytes": 15098,
-      "sha256": "b6e334a83b6a2a1f1f1281fd09740bc0b6cc2c24c4a115db073359dfeab7d4c4"
+      "bytes": 16660,
+      "sha256": "3fd7d25affc1697bccdd7adefe7f2f5c7d3f8b3b2f79bc63ad5a2f6812402468"
     },
     {
       "path": "maya_agent/rigs/mobile_io/server/maya_mobile_exchange_server.py",
@@ -664,8 +664,8 @@
     },
     {
       "path": "使用说明.md",
-      "bytes": 5641,
-      "sha256": "409a4f3698305fce23d27e3c55486e4030acb93129e83458e3aee3f4e6da48f0"
+      "bytes": 5931,
+      "sha256": "ac8377e97ad42afb3384b9f54db0ff9641969adc398f4251a822f682fbe8f145"
     },
     {
       "path": "安装手机互通.py",

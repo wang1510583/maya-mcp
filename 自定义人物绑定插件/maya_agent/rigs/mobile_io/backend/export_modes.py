@@ -1,9 +1,17 @@
 """Registered character modes and their editable inputs. Read-only Maya export."""
 import json
+import math
 import maya.cmds as c
 import maya.api.OpenMaya as om
 TR=('rotateX','rotateY','rotateZ','translateX','translateY','translateZ')
 IDENTITY=[1.,0,0,0,0,1.,0,0,0,0,1.,0,0,0,0,1.]
+
+def channel_number(value, plug):
+    # Internal scalar inputs share numeric TR slots, including animated bools.
+    # JSON true/false is not a numeric value in the exchange format.
+    if not isinstance(value,(int,float,bool)) or not math.isfinite(value):
+        raise ValueError('无效导出通道数值：'+plug+' = '+repr(value))
+    return float(value)
 
 def canonical(plug):
     s=om.MSelectionList();s.add(plug);p=s.getPlug(0)
@@ -17,7 +25,7 @@ def extend_snapshot(snap):
     def row(node,uid,role,plugs):
         node=c.ls(node,long=True)[0];channels={}
         for a,p in zip(TR,plugs):
-            if p:channels[a]=dict(value=c.getAttr(p),locked=c.getAttr(p,lock=True))
+            if p:channels[a]=dict(value=channel_number(c.getAttr(p),p),locked=c.getAttr(p,lock=True))
         data=dict(id=uid,nodeId=c.ls(node,uuid=True)[0],role=role,part='internal',path=node,name=node.rsplit('|',1)[-1],
             position=c.xform(node,q=True,ws=True,t=True),worldMatrix=c.xform(node,q=True,ws=True,m=True),
             rotateOrder=c.getAttr(node+'.rotateOrder'),channels=channels,curves=[],visible=False,inputOnly=True,inputPlugs=plugs)
