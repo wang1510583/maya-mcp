@@ -3,6 +3,7 @@
 Constant channel offsets preserve every original curve and its interpolation.
 The source world matrix only drives the display, never feeds back to the input.
 """
+from maya_agent.rigs import scene_data
 import json
 
 TR=tuple(p+a for p in ('translate','rotate') for a in 'XYZ')
@@ -20,7 +21,7 @@ def resolve(plug):
     import maya.cmds as c
     target=surface(node)
     if target==node:return plug
-    data=json.loads(c.getAttr(target+'.zeroChannelData'))
+    data=scene_data.read(target+'.zeroChannelData')
     if attr in ('scaleX','scaleY','scaleZ','rotateOrder'):return target+'.'+attr
     return target+'.'+attr if attr in data['offsets'] else plug
 
@@ -29,7 +30,7 @@ def offset(plug):
     import maya.cmds as c
     node,attr=plug.rsplit('.',1)
     if not c.objExists(node+'.zeroChannelData'):return 0.0
-    return json.loads(c.getAttr(node+'.zeroChannelData'))['offsets'].get(attr,0.0)
+    return scene_data.read(node+'.zeroChannelData')['offsets'].get(attr,0.0)
 
 
 def absolute(plug,value):
@@ -152,7 +153,7 @@ def build(rig):
     for part in rig['parts'].values():
         if c.objExists(part['root']+'.armWorldIKData'):
             enable_pole(part['root'])
-            part['world_ik']=json.loads(c.getAttr(part['root']+'.armWorldIKData'))
+            part['world_ik']=scene_data.read(part['root']+'.armWorldIKData')
     return rig['zero_channels']
 
 
@@ -163,7 +164,7 @@ def repair_display(rig):
     repaired=[]
     for part in rig['parts'].values():
         for role,proxy in part.get('zero_controls',{}).items():
-            data=json.loads(c.getAttr(proxy+'.zeroChannelData'))
+            data=scene_data.read(proxy+'.zeroChannelData')
             if 'artwork_sources' in data:continue
             source=data['source']
             originals=c.listRelatives(source,s=True,f=True) or []
@@ -197,7 +198,7 @@ def selected_generic():
     result=[]
     for n in c.ls(sl=True,long=True,objectsOnly=True) or []:
         if not c.objExists(n+'.zeroChannelData'):continue
-        d=json.loads(c.getAttr(n+'.zeroChannelData'))
+        d=scene_data.read(n+'.zeroChannelData')
         # Existing live-arm gestures and shared wrist IK already isolate input.
         if d['part'].startswith('arm'):
             from . import arm_ik_shared
@@ -211,16 +212,28 @@ def begin(control, translation_routes=None):
     import maya.cmds as c
     import maya.api.OpenMaya as om
     from . import live_edit,live_arm_manual
-    d=json.loads(c.getAttr(control+'.zeroChannelData'));source=d['source']
+    d=scene_data.read(control+'.zeroChannelData');source=d['source']
     from . import arm_ik_shared
     if d['role']=='pole_locator' and arm_ik_shared.active(d['root'],d['role']):
         return arm_ik_shared.begin(d['root'],role=d['role'])
     if c.objExists(source+'.liveInput'):
         source=(c.listConnections(source+'.liveInput',s=True,d=False) or [source])[0]
     snapshot=live_edit._snapshot([control+'.'+a for a in d['offsets']])
+    fk_pole=(d['part'].startswith('arm') and d['role']=='pole_locator' and
+             c.objExists(d['root']+'.liveAlignmentData'))
+    if fk_pole:
+        # Absorbing a pole gesture changes companion FK channels. Capture them
+        # before input isolation so Auto Key, native S and undo retain the pose.
+        owner=next((e for e in (live_edit._gesture or {}).get('arm_gestures',[])
+                    if e['data']['root'].rsplit('|',1)[-1]==d['root'].rsplit('|',1)[-1]),None)
+        if owner:snapshot=owner['snapshot']
+        else:
+            _,destinations,frames,zero,restore=live_edit._plan(d['root'])
+            nodes=list(dict.fromkeys([n for n,m in frames+restore]+zero))
+            snapshot=live_edit._snapshot([destinations.get(n+'.'+a,n+'.'+a) for n in nodes for a in TR])
     entry=dict(data={'root':d['root']},role=d['role'],mode=c.contextInfo(c.currentCtx(),c=True),snapshot=snapshot,
                proxy=control,source=source,edges=[],curve_edges=[],changed=False,finished=False,
-               generic_zero=True,destinations={},input_basis=om.MMatrix(),native_attrs=TR)
+               generic_zero=True,fk_pole=fk_pole,destinations={},input_basis=om.MMatrix(),native_attrs=TR)
     try:
         display=om.MMatrix(c.xform(control,q=True,ws=True,m=True))
         entry['input_basis']=live_edit._frame(source)*display.inverse()

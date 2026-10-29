@@ -66,10 +66,10 @@ def run():
         for mode in (0,1):
             arm_ik.switch(original_arm,mode,key=False)
             base={n:om.MMatrix(world(n)) for n in finger}
-            master=rig['master_control'];c.setAttr(master+'.translate',3,-2,4);c.setAttr(master+'.rotate',17,21,-14)
+            master=rig['master_control'];c.setAttr(master+'.translate',3,-2,4);c.setAttr(master+'.rotate',17,21,-14);c.setAttr(master+'.overallScale',2)
             delta=om.MMatrix(world(master))
             e=max(error(world(n),list(m*delta)) for n,m in base.items());follow_errors.append(e);assert e<1e-4,e
-            c.setAttr(master+'.translate',0,0,0);c.setAttr(master+'.rotate',0,0,0)
+            c.setAttr(master+'.translate',0,0,0);c.setAttr(master+'.rotate',0,0,0);c.setAttr(master+'.overallScale',1)
         ik=json.loads(c.getAttr(original_arm+'.armWorldIKData'))
         wrist=ik['controls']['wrist'];local=om.MMatrix(world(finger[0]))*om.MMatrix(world(joints[-1])).inverse()
         c.setAttr(wrist+'.tx',c.getAttr(wrist+'.tx')+3)

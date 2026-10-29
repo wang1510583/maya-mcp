@@ -3,10 +3,11 @@
 Apply the same world delta to part containers and independent input spaces.
 Frozen animation references and solver outputs are never patched or re-keyed.
 """
+from maya_agent.rigs import scene_data
 import json
 import math
 
-VERSION = '1.0.0'
+VERSION = '1.1.0'
 ATTRIBUTE = 'characterMasterData'
 
 
@@ -48,17 +49,19 @@ def attach(rig):
     if c.referenceQuery(root,isNodeReferenced=True) or any(c.lockNode(root,q=True,lock=True)):
         raise ValueError('不能修改引用或锁定的角色根：'+root)
     if c.objExists(root + '.' + ATTRIBUTE):
-        data = json.loads(c.getAttr(root + '.' + ATTRIBUTE))
+        data = scene_data.read(root + '.' + ATTRIBUTE)
         if not c.objExists(data['control']):
             raise ValueError('总控制圆环已被删除，请先恢复该节点。')
         rig['master_control'] = data['control']
+        from .master_scale import enable
+        enable(rig)
         return data
     nodes = _nodes(rig)
     ik_inputs = []
     for part in rig['parts'].values():
         plug = part['root']+'.armWorldIKData'
         if c.objExists(plug):
-            ik_inputs.extend(json.loads(c.getAttr(plug))['controls'].values())
+            ik_inputs.extend(scene_data.read(plug)['controls'].values())
     for node in ik_inputs:
         if c.getAttr(node+'.inheritsTransform') or c.referenceQuery(node,isNodeReferenced=True):
             raise ValueError('独立 IK 输入空间已经被修改：'+node)
@@ -127,6 +130,8 @@ def attach(rig):
         c.addAttr(root, ln=ATTRIBUTE, dt='string')
         c.setAttr(root+'.'+ATTRIBUTE, json.dumps(data), type='string', lock=True)
         rig['master_control'] = control
+        from .master_scale import enable
+        enable(rig)
         return data
     except Exception:
         for row in reversed(reparented):
@@ -152,7 +157,7 @@ def attach(rig):
 
 def upgrade(root):
     import maya.cmds as c
-    rig = json.loads(c.getAttr(root+'.integratedRigData'))
+    rig = scene_data.read(root+'.integratedRigData')
     c.undoInfo(openChunk=True,chunkName='UpgradeCharacterMasterControl')
     try:
         data = attach(rig)
@@ -170,7 +175,7 @@ def upgrade_selected():
     selected = c.ls(sl=True,long=True) or []
     matches = []
     for root in roots:
-        rig=json.loads(c.getAttr(root+'.integratedRigData'))
+        rig=scene_data.read(root+'.integratedRigData')
         containers=[root]+[p['root'] for p in rig.get('parts',{}).values()]
         paths=[c.ls(n,long=True)[0] for n in containers if c.objExists(n)]
         if any(n==p or n.startswith(p+'|') for n in selected for p in paths):

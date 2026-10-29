@@ -3,6 +3,7 @@
 Only explicit channel edits perform matching. Animated mode evaluation and
 playback are ordinary Maya choice/constraint graphs, with no per-frame writes.
 """
+from maya_agent.rigs import scene_data
 import json
 import math
 
@@ -55,7 +56,7 @@ def _registration(root):
     # These records live directly on their mode control. Older native motion
     # references copied the JSON verbatim, pointing back at the real control.
     if any(c.objExists(root+'.'+a) for a in ('bodyDriveData','chestSpaceData')):
-        if c.ls(root,uuid=True)!=c.ls(node,uuid=True):return None
+        if c.ls(root,long=True)!=c.ls(node,long=True):return None
     return data
 
 
@@ -84,7 +85,7 @@ def _finish_channel_switch(root):
 
 def _data(root):
     import maya.cmds as c
-    return json.loads(c.getAttr(root+'.armWorldIKData'))
+    return scene_data.read(root+'.armWorldIKData')
 
 
 def _mode(value):return int(value>=.5)
@@ -230,7 +231,7 @@ def enable_character(root):
     """Explicit upgrade of an existing all-FK character; never reinterpret old IK-space animation."""
     import maya.cmds as c
     from .live_layers import curves_for_plug
-    rig=json.loads(c.getAttr(root+'.integratedRigData'))
+    rig=scene_data.read(root+'.integratedRigData')
     arms=[p for k,p in rig['parts'].items() if k.startswith('arm') and not c.objExists(p['root']+'.armWorldIKData')]
     for part in arms:
         plug=part['controls']['end_fk']+'.global'
@@ -396,6 +397,7 @@ def switch(root,value,key=None,previous=None,_defer_close=False):
 
 def install():
     """Observe explicit channel edits only; evaluation/time changes never match."""
+    if globals().get('_runtime_disabled',False):return 0
     import maya.cmds as c
     import maya.api.OpenMaya as om
     import maya.api.OpenMayaAnim as oma
@@ -411,7 +413,7 @@ def install():
             try:om.MMessage.removeCallback(entry['id'])
             except RuntimeError:pass
             _callbacks.pop(root,None)
-    roots=(c.ls('*:rig_root',type='transform') or [])+(c.ls('*.upperArmSpaceData','*:*.upperArmSpaceData','*.matchedSpaceData','*:*.matchedSpaceData','*.bodyDriveData','*:*.bodyDriveData',objectsOnly=True) or [])
+    roots=(c.ls('::rig_root',type='transform') or [])+(c.ls('::*.upperArmSpaceData','::*.matchedSpaceData','::*.bodyDriveData',objectsOnly=True) or [])
     roots+=c.ls('::*.chestSpaceData',objectsOnly=True) or []
     roots+=c.ls('::*.genericSpaceData',objectsOnly=True) or []
     for root in dict.fromkeys(roots):
@@ -453,7 +455,11 @@ def install():
                                 om.MEventMessage.addEventCallback('Undo',history_changed),
                                 om.MEventMessage.addEventCallback('Redo',history_changed),
                                 om.MSceneMessage.addCallback(om.MSceneMessage.kAfterOpen,lambda *args:install()),
-                                om.MSceneMessage.addCallback(om.MSceneMessage.kAfterImport,lambda *args:install())])
+                                om.MSceneMessage.addCallback(om.MSceneMessage.kAfterImport,lambda *args:install()),
+                                om.MSceneMessage.addCallback(om.MSceneMessage.kAfterCreateReference,history_changed),
+                                om.MSceneMessage.addCallback(om.MSceneMessage.kAfterLoadReference,history_changed),
+                                om.MSceneMessage.addCallback(om.MSceneMessage.kAfterUnloadReference,history_changed),
+                                om.MSceneMessage.addCallback(om.MSceneMessage.kAfterRemoveReference,history_changed)])
     _sync_mode_cache()
     from . import wrist_key_colors
     wrist_key_colors.install()

@@ -8,7 +8,7 @@ WINDOW='IntegratedHeadNeckSettings'
 class HeadNeckWindow:
     def __init__(self,extra_options=None):
         self.targets=[]
-        layout.begin(c,WINDOW,'头部 / 颈部',VERSION,'依次选择颈根、其余颈骨、头部；头独立旋转，颈部混合胸与头的方向。')
+        layout.begin(c,WINDOW,'头部 / 颈部',VERSION,'只选一个目标创建头；多个目标按脖子到头排序，最后一个是头。')
         self.selection_frame,self.targets_list=layout.selection(c,self.refresh,self.reverse)
         self.namespace=layout.namespace(c,'head')
         self.control_size=c.floatFieldGrp(label='控制器大小',numberOfFields=1,value1=1.0)
@@ -17,7 +17,7 @@ class HeadNeckWindow:
         self.animation_fields,self.frame_bounds,self.sample_step=layout.animation_fields(c)
         if extra_options:extra_options()
         self.create_button=layout.create_button(c,'保存部位设置',lambda *_:None)
-        self.status=layout.status(c,'至少 2 个目标；单节颈部由胸部和头部各影响一半方向。')
+        self.status=layout.status(c,'1–64 个目标；单目标仅创建头控制器，其余情况下最后一个是头、前面均为脖子。')
         self.refresh();self.toggle_animation();c.showWindow(WINDOW)
     def refresh(self,*_):
         self.targets=c.ls(orderedSelection=True,long=True) or [];self.refresh_list()

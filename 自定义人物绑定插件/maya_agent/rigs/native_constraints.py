@@ -4,6 +4,7 @@ Ordinary objects delegate to Maya's installed MEL implementation. The vendor
 scripts are read at runtime, never edited or shipped. Creation still uses real
 Maya constraint nodes; playback requires no Python evaluation.
 """
+from maya_agent.rigs import scene_data
 import json
 import os
 import re
@@ -17,6 +18,7 @@ if '_installed' not in globals():
 
 def dispatch(kind):
     """Called only by Maya's three doCreate*ConstraintArgList procedures."""
+    if globals().get('_runtime_disabled',False):return 0
     import maya.cmds as c
     import maya.mel as mel
     from . import external_constraints as external
@@ -138,13 +140,14 @@ def refresh(*_):
     import maya.cmds as c
     from . import external_constraints as external
     for owner in c.ls('::*.' + external.DATA, objectsOnly=True) or []:
-        if json.loads(c.getAttr(owner + '.' + external.DATA)).get('native'):
+        if scene_data.read(owner + '.' + external.DATA).get('native'):
             constraint = external._link(owner, 'constraint')
             if constraint:
                 watch(constraint)
 
 
 def install():
+    if globals().get('_runtime_disabled',False):return False
     import maya.api.OpenMaya as om
     import maya.mel as mel
     global _installed
@@ -169,7 +172,8 @@ def install():
                 int $handled = python("%s");
                 if (!$handled) %s($version, $args);
             }''' % (name, expression, alias))
-        for event in (om.MSceneMessage.kAfterOpen, om.MSceneMessage.kAfterImport):
+        for event in (om.MSceneMessage.kAfterOpen, om.MSceneMessage.kAfterImport,
+                      om.MSceneMessage.kAfterCreateReference, om.MSceneMessage.kAfterLoadReference):
             _scene_callbacks.append(om.MSceneMessage.addCallback(event, refresh))
         _installed = True
     refresh()

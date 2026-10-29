@@ -4,6 +4,7 @@ The gesture reference contains constants only and is removed on mouse release.
 An editable pivot on the visible control represents the solved rotation centre
 without counter-animating the shoulder, wrist or elbow direction controller.
 """
+from maya_agent.rigs import scene_data
 import json
 
 PIVOTS = tuple('inputPivot'+a for a in 'XYZ')
@@ -14,7 +15,7 @@ CHANNELS = PIVOTS+AXES+ORIENTS
 
 def ensure_pivots(root, role):
     import maya.cmds as c
-    live=json.loads(c.getAttr(root+'.liveAlignmentData'))
+    live=scene_data.read(root+'.liveAlignmentData')
     source=live['inputs'][role];proxy=live['controls'][role]
     changed=False
     for attr in CHANNELS:
@@ -54,7 +55,7 @@ def _install(root,role):
     import maya.cmds as c
     import maya.api.OpenMaya as om
     from .live_edit import _frame
-    live=json.loads(c.getAttr(root+'.liveAlignmentData'))
+    live=scene_data.read(root+'.liveAlignmentData')
     source=live['inputs'][role];proxy=live['controls'][role]
     old_text=c.getAttr(source+'.liveRotationData') if c.objExists(source+'.liveRotationData') else None
     if old_text:
@@ -168,7 +169,7 @@ def solve_rotation(node,desired,proxy):
     import maya.cmds as c
     import maya.api.OpenMaya as om
     import math
-    data=json.loads(c.getAttr(node+'.liveRotationData'));layer=data['layers'][-1]
+    data=scene_data.read(node+'.liveRotationData');layer=data['layers'][-1]
     basis=om.MMatrix(layer['basis'])
     old_op=om.MMatrix(c.getAttr(layer['old_op'])) if layer['old_op'] else om.MMatrix(layer['old_matrix'])
     baseline=om.MMatrix(c.getAttr(node+'.matrix'))*old_op

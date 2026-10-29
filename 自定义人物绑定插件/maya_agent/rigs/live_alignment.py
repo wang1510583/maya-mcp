@@ -5,6 +5,7 @@ offsetParentMatrix follows the result; its world matrix is NEVER solver input.
 Playback uses the graph. Native viewport edits first rebase the input chain via
 live_edit, so the manipulator uses the solved pivot and axes, not stale inputs.
 """
+from maya_agent.rigs import scene_data
 import json
 
 VERSION = '1.5.1'
@@ -179,7 +180,7 @@ def enable(rig, kind):
     if kind not in ('arm','leg'):raise ValueError('实时对齐仅用于手臂和腿部。')
     root=rig['root'];ns=rig['namespace'];side=rig.get('side','L')
     if c.objExists(root+'.liveAlignmentData'):
-        data=json.loads(c.getAttr(root+'.liveAlignmentData'))
+        data=scene_data.read(root+'.liveAlignmentData')
         if not all(c.objExists(n) for n in data['controls'].values()):raise ValueError('实时控制器不完整，请先撤销删除操作。')
         from . import live_edit
         live_edit.install()
@@ -317,13 +318,15 @@ def remove(root):
     """Remove the surface layer, returning current channels/curves to old controls."""
     import maya.cmds as c
     if not c.objExists(root+'.liveAlignmentData'):return
-    data=json.loads(c.getAttr(root+'.liveAlignmentData'))
+    data=scene_data.read(root+'.liveAlignmentData')
     if any(c.objExists(n+'.liveRotationData') for n in data['inputs'].values()):
         raise ValueError('这套手臂已有独立旋转动画层。请使用 liveAlignment=0 关闭实时显示；移除操作层前需先烘焙旋转结果。')
     auto=c.autoKeyframe(q=True,state=True)
     c.undoInfo(openChunk=True,chunkName='RemoveLiveLimbAlignment')
     try:
         c.autoKeyframe(state=False)
+        from . import foot_reach
+        foot_reach.remove(root)
         for e in data['entries']:
             incoming=c.connectionInfo(e['proxy'],sourceFromDestination=True);value=c.getAttr(e['proxy'])
             c.disconnectAttr(e['proxy'],e['source'])
@@ -420,7 +423,7 @@ def enable_character(root):
         for part_root,value in flags.items():c.setAttr(part_root+'.liveAlignment',value)
         for part_root,value in old_live.items():
             old_data=json.loads(value)
-            new_data=json.loads(c.getAttr(part_root+'.liveAlignmentData'))
+            new_data=scene_data.read(part_root+'.liveAlignmentData')
             if len(new_data['created'])>len(old_data['created']):_rollback_extension(new_data,old_data)
             c.setAttr(part_root+'.liveAlignmentData',lock=False)
             c.setAttr(part_root+'.liveAlignmentData',value,type='string',lock=True)

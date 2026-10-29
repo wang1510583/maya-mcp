@@ -1,4 +1,5 @@
 """Include inherited hips rotation in the spine's chest endpoint blend."""
+from maya_agent.rigs import scene_data
 import json
 
 
@@ -6,7 +7,7 @@ def enable(rig):
     import maya.cmds as c
     ns=rig['namespace'];hips=rig['controls']['hips'];chest=rig['controls']['chest']
     if not c.objExists(chest+'.global'):return None
-    if c.objExists(chest+'.bodyFollowData'):return json.loads(c.getAttr(chest+'.bodyFollowData'))
+    if c.objExists(chest+'.bodyFollowData'):return scene_data.read(chest+'.bodyFollowData')
     mids=[n for role,n in rig['controls'].items() if role not in ('hips','chest')]
     if not mids:return None
     created=[];replaced=[];slide_values={}

@@ -4,6 +4,7 @@ The visible handle is an input surface, not an alternative two-bone IK solver.
 Align once per gesture, then solve the requested world transform into the same
 original input that an animator would manipulate after manual alignment.
 """
+from maya_agent.rigs import scene_data
 import math
 import json
 
@@ -31,7 +32,7 @@ def selected_roles(root):
         from . import arm_ik,arm_ik_shared
         d=arm_ik._data(root)
         return ['end_fk'] if arm_ik_shared.active(root) and set(c.ls(sl=True,long=True) or []).intersection(c.ls(surface(d['fk_wrist']),long=True)) else []
-    data=json.loads(c.getAttr(root+'.liveAlignmentData'))
+    data=scene_data.read(root+'.liveAlignmentData')
     if data['kind']!='arm':return []
     selected=set(c.ls(sl=True,long=True,objectsOnly=True) or [])
     return [r for r in ('shoulder_fk','middle_fk','end_fk')
@@ -66,7 +67,7 @@ def begin(root,role,_setup=None):
     from .live_edit import prepare, _restore, _frame, PosePreservationError, TR
     from . import arm_ik_shared
     if arm_ik_shared.active(root,role):return arm_ik_shared.begin(root,_setup)
-    data=json.loads(c.getAttr(root+'.liveAlignmentData'))
+    data=scene_data.read(root+'.liveAlignmentData')
     if any(c.objExists(n+'.liveRotationData') for n in data['inputs'].values()):
         raise ValueError('此手臂还包含旧版隐藏旋转参考，请先迁移旧动画。')
     mode=c.contextInfo(c.currentCtx(),c=True)
@@ -215,6 +216,9 @@ def update(entry,force=False,_restore_display=True):
     try:
         body_rotation='body_rotation_translate' in entry
         _world(entry['source'],desired,entry['destinations'],solve_translation=not body_rotation)
+        if entry.get('foot_rotation'):
+            from . import foot_translation
+            foot_translation.transfer_rotation(entry)
         if body_rotation:
             # Translate only by what Maya's rotate tool explicitly requested;
             # the body's own bending displacement is part of its output.
@@ -241,12 +245,12 @@ def _reconnect(entry,values):
     entry['finished']=True
 
 
-def finish(entry,cancel=False):
+def finish(entry,cancel=False,align=True,sample=True):
     import maya.cmds as c
     from .live_edit import _restore,prepare,PosePreservationError
     if entry['finished']:return
     try:
-        if not cancel:update(entry)
+        if not cancel and sample:update(entry)
     except Exception:
         finish(entry,cancel=True)
         raise
@@ -259,7 +263,7 @@ def finish(entry,cancel=False):
     for plug,value in values.items():c.setAttr(plug,value-offset(plug))
     entry['finished']=True
     if cancel or not entry['changed']:_restore(entry['snapshot'])
-    elif any(child.get('shared_ik') or child.get('generic_zero') for child in children):return
+    elif not align or any(child.get('shared_ik') or child.get('generic_zero') for child in children):return
     else:
         # Store the same canonical pose that the next gesture will start from.
         # Otherwise a moved elbow is keyed as an offset at frame A, then the

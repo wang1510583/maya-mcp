@@ -3,6 +3,7 @@
 Never constrain a live/zero display surface: its parent inverse reads the solve.
 Original channels, animation, DAG parenting and display connections are retained.
 """
+from maya_agent.rigs import scene_data
 import json
 import math
 
@@ -23,7 +24,8 @@ def _node(name):
 
 def _same(a, b):
     import maya.cmds as c
-    return c.ls(a, uuid=True) == c.ls(b, uuid=True)
+    # References of the same file can share source UUIDs.
+    return c.ls(a, long=True) == c.ls(b, long=True)
 
 
 def resolve(control):
@@ -31,7 +33,7 @@ def resolve(control):
     import maya.cmds as c
     control = _node(control)
     for root in c.ls('::*.integratedRigData', objectsOnly=True) or []:
-        rig = json.loads(c.getAttr(root + '.integratedRigData'))
+        rig = scene_data.read(root + '.integratedRigData')
         for key, part in rig['parts'].items():
             roles = ('shoulder_fk', 'middle_fk', 'end_fk', 'pole_locator') if key.startswith('arm_') else ('foot',) if key.startswith('leg_') else ()
             role = next((role for role in roles if any(
@@ -101,8 +103,8 @@ def attach(control, target, kind='parent', options=None, native=False):
     if any(_same(n, joint) for n in targets for joint in item['joints']):
         raise ValueError('同一肢体的求解骨骼不能作为外部目标，可能形成循环。')
     for n in (control, source):
-        if c.referenceQuery(n, isNodeReferenced=True) or any(c.lockNode(n, q=True, lock=True)):
-            raise ValueError('不能修改引用或锁定的绑定输入：' + n)
+        if any(c.lockNode(n, q=True, lock=True)):
+            raise ValueError('不能修改锁定的绑定输入：' + n)
     dst = source + '.offsetParentMatrix'
     if c.getAttr(dst, lock=True):
         raise ValueError('绑定输入矩阵已锁定：' + source)

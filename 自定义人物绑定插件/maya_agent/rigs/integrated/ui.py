@@ -47,8 +47,9 @@ def validate_count(key,names):
         from maya_agent.rigs.fingers import inspect_selection
         return inspect_selection(names)
     count=PARTS[key]['count']
-    if (count and len(names)!=count) or (not count and not 2<=len(names)<=64):
-        raise ValueError('{}请依次选择 {} 个骨骼或物体。'.format(PARTS[key]['label'],count or '2–64'))
+    minimum=1 if PARTS[key]['kind']=='head' else 2
+    if (count and len(names)!=count) or (not count and not minimum<=len(names)<=64):
+        raise ValueError('{}请依次选择 {} 个骨骼或物体。'.format(PARTS[key]['label'],count or '{}–64'.format(minimum)))
     if any('.' in n or c.nodeType(n) not in ('joint','transform') for n in names):
         raise ValueError('请选骨骼或物体，不要选择组件。')
 
@@ -59,7 +60,10 @@ class PartButton(QtWidgets.QPushButton):
     def __init__(self,key,parent):
         super().__init__(parent);self.key=key
         self.setCursor(QtCore.Qt.PointingHandCursor)
-        self.setToolTip('左键：载入当前有序选择\n右键：打开本部位详细设置\n中键：清空本部位载入')
+        tip='左键：载入当前有序选择\n右键：打开本部位详细设置\n中键：清空本部位载入'
+        if key=='head':tip+='\n单目标仅创建头；多个目标最后一个是头，前面均为脖子。'
+        elif key.startswith('arm_'):tip+='\n未载入同侧肩膀时，大臂起点直接跟随胸部。'
+        self.setToolTip(tip)
     def mousePressEvent(self,event):
         if event.button()==QtCore.Qt.RightButton:
             self.settings.emit(self.key);event.accept();return
@@ -143,11 +147,11 @@ class IntegratedWindow(QtWidgets.QDialog):
         layout.addLayout(generic_row)
         self.refresh_generic()
         self.add_global_options()
-        master_button=QtWidgets.QPushButton('添加 / 选择总控制圆环',self)
-        master_button.setToolTip('新建角色自动添加；已有角色可选中后添加。原点圆环统一移动和旋转角色，包含 IK 手腕与脚腕。')
+        master_button=QtWidgets.QPushButton('添加 / 升级 / 选择总控制圆环',self)
+        master_button.setToolTip('新建角色自动添加；已有角色可选中后升级。圆环统一移动、旋转，通过“整体缩放”属性等比例缩放骨骼、控制器和蒙皮。')
         def add_master():
             from .master_control import upgrade_selected
-            data=upgrade_selected();self.message('总控制圆环已就绪：W 移动、E 旋转，包含 IK 手脚。');return data
+            data=upgrade_selected();self.message('总控制圆环已就绪：W 移动、E 旋转；通道框“整体缩放”控制整个角色大小，1 为原大小。');return data
         master_button.clicked.connect(lambda:self.safe(add_master));layout.addWidget(master_button)
         panel_button=QtWidgets.QPushButton('创建 / 显示模式切换面板',self)
         panel_button.setToolTip('在已创建角色右侧生成场景滑块；选择圆圈后按 W，沿横轴拖动切换。')
@@ -167,7 +171,7 @@ class IntegratedWindow(QtWidgets.QDialog):
             from maya_agent.rigs.mobile_io import show_ui
             return show_ui()
         mobile_button.clicked.connect(lambda:self.safe(open_mobile));layout.addWidget(mobile_button)
-        hint=QtWidgets.QLabel('新建自动添加原点总控制圆环，统一移动 / 旋转 IK 手脚。\n原有通用根保留；胸 / 腰用于部位跟随。')
+        hint=QtWidgets.QLabel('总控制圆环统一移动 / 旋转，“整体缩放”改变角色大小。\n已有角色可通过上方总圆环按钮升级；原动画保留。')
         hint.setWordWrap(True)
         hint.setStyleSheet('color:#d0d0d0;font-size:12px;');layout.addWidget(hint)
         self.status=QtWidgets.QLabel('尚未载入部位。');self.status.setWordWrap(True);self.status.setMinimumHeight(40);layout.addWidget(self.status)

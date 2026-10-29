@@ -24,8 +24,15 @@ class StateCommand(om.MPxCommand):
         if self.phase=='after':self.restore()
 
     def restore(self):
+        import maya.cmds as c
         from maya_agent.rigs import live_edit
-        for snapshot in self.snapshots:live_edit._restore(snapshot)
+        # Restoring channels is part of this command's undo/redo, not a new
+        # edit. Recording cmds.setAttr here would erase Maya's redo queue.
+        recording=c.undoInfo(q=True,state=True)
+        c.undoInfo(stateWithoutFlush=False)
+        try:
+            for snapshot in self.snapshots:live_edit._restore(snapshot)
+        finally:c.undoInfo(stateWithoutFlush=recording)
 
 
 def initializePlugin(obj):

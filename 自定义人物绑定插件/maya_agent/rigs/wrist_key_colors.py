@@ -3,6 +3,7 @@
 Only keyTickDrawSpecial is edited. Curves, breakdown status and animation
 values are unchanged. Loaded by the rig runtime; global=1 uses special ticks.
 """
+from maya_agent.rigs import scene_data
 import json
 
 if '_callbacks' not in globals():_callbacks=[]
@@ -15,11 +16,11 @@ if '_generation' not in globals():_generation=0
 def _data(root):
     import maya.cmds as c
     if c.objExists(root+'.armWorldIKData'):
-        data=json.loads(c.getAttr(root+'.armWorldIKData'))
+        data=scene_data.read(root+'.armWorldIKData')
         return dict(control=data['fk_wrist'],global_plug=data['global_plug'],
                     extra=[data['controls']['wrist']+'.'+a for a in ('translateX','translateY','translateZ','rotateX','rotateY','rotateZ')])
     if c.objExists(root+'.footSpaceData'):
-        data=json.loads(c.getAttr(root+'.footSpaceData'))
+        data=scene_data.read(root+'.footSpaceData')
         return dict(control=data['control'],global_plug=data['global_plug'],extra=[])
     return None
 
@@ -106,11 +107,12 @@ def uninstall():
 
 
 def install(roots=None):
+    if globals().get('_runtime_disabled',False):return []
     import maya.cmds as c
     import maya.api.OpenMaya as om
     import maya.api.OpenMayaAnim as oma
     uninstall()
-    _roots[:]=list(roots) if roots is not None else [n for n in c.ls('*:rig_root') or [] if _data(n)]
+    _roots[:]=list(roots) if roots is not None else [n for n in c.ls('::rig_root') or [] if _data(n)]
     _callbacks.append(oma.MAnimMessage.addAnimCurveEditedCallback(_request))
     for event in ('SelectionChanged','Undo','Redo','timeChanged'):
         _callbacks.append(om.MEventMessage.addEventCallback(event,_request))

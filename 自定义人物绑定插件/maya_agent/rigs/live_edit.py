@@ -4,6 +4,7 @@ The display graph must never be mistaken for the input coordinate system.
 Before a native transform gesture, align the original input chain to the
 already-solved pose. Playback remains entirely in the dependency graph.
 """
+from maya_agent.rigs import scene_data
 import json
 
 TR = tuple(p+a for p in ('translate', 'rotate') for a in 'XYZ')
@@ -49,14 +50,11 @@ def _world(node, desired, destinations, solve_translation=True):
             plug=destinations.get(node+'.translate'+axis,node+'.translate'+axis)
             if not c.getAttr(plug,lock=True) and abs(value)>1e-9:_set(plug,c.getAttr(plug)+value)
         return
-    parent = om.MMatrix(c.getAttr(node+'.parentMatrix[0]'))
-    from .external_constraints import registry as external_constraint_registry
-    if external_constraint_registry(node):
-        # parentMatrix already includes OPM in Maya. The temporary constraint
-        # adds a non-identity OPM: use the DAG parent here to count it just once.
-        dag_parent=(c.listRelatives(node,parent=True,fullPath=True) or [None])[0]
-        parent=(om.MMatrix(c.xform(dag_parent,q=True,ws=True,m=True))
-                if dag_parent and c.getAttr(node+'.inheritsTransform') else om.MMatrix())
+    # Maya parentMatrix already includes OPM. Use the actual DAG parent before
+    # applying OPM once, including master motion and native constraint spaces.
+    dag_parent=(c.listRelatives(node,parent=True,fullPath=True) or [None])[0]
+    parent=(om.MMatrix(c.xform(dag_parent,q=True,ws=True,m=True))
+            if dag_parent and c.getAttr(node+'.inheritsTransform') else om.MMatrix())
     parent = om.MMatrix(c.getAttr(node+'.offsetParentMatrix'))*parent
     local = desired*parent.inverse()
     rotation = om.MTransformationMatrix(local).rotation(asQuaternion=True).asMatrix()
@@ -87,7 +85,7 @@ def _world(node, desired, destinations, solve_translation=True):
 def _plan(root):
     """Match inputs to the current solved pose without invoking Easy Rig or keying."""
     import maya.cmds as c
-    data = json.loads(c.getAttr(root+'.liveAlignmentData'))
+    data = scene_data.read(root+'.liveAlignmentData')
     destinations = {e['source']:e['proxy'] for e in data['entries']}
     ns = root.rsplit('|',1)[-1].rsplit(':', 1)[0]
     side = 'R' if '_R' in data['inputs'][next(iter(data['inputs']))].rsplit(':',1)[-1] else 'L'
@@ -184,16 +182,18 @@ overrides. Never call on load, selection, time change or metadata upgrade.
             c.disconnectAttr(source,plug);c.setAttr(plug,snapshot[0][plug])
         endpoint=(data['targets']['foot'],frames[0][1]) if data['kind']=='leg' else None
         _apply_plan(destinations,frames,zero,restore,endpoint)
+        # FK alignment absorbs the pole's out-of-plane offset into the existing
+        # joint rotations. Restoring its previous Z here applies that offset a
+        # second time and forces the pose-preservation check to roll back.
         if data['kind']=='arm':
-            # Recalibration is an optional re-encoding, not an animator edit of
-            # the elbow pole. Keep its authored Z (zero by default, or explicit
-            # user animation) while matching the FK inputs. If this constrained
-            # calibration cannot preserve the solve, the normal fallback keeps
-            # the completed gesture in its original channels instead.
+            from . import arm_ik_shared
             from .zero_channels import resolve
-            pole=ns+':elb_'+('R' if '_R' in data['inputs']['shoulder_fk'].rsplit(':',1)[-1] else 'L')+'1'
-            pole_z=resolve(pole+'.translateZ')
-            if pole_z in snapshot[0]:_set(pole_z,snapshot[0][pole_z])
+            if arm_ik_shared.active(root,'pole_locator'):
+                # World IK owns a separate pole track. Preserve its FK values
+                # while the inactive FK inputs are aligned for other controls.
+                pole=ns+':elb_'+('R' if '_R' in data['inputs']['shoulder_fk'].rsplit(':',1)[-1] else 'L')+'1'
+                pole_z=resolve(pole+'.translateZ')
+                if pole_z in snapshot[0]:_set(pole_z,snapshot[0][pole_z])
         edited={p:c.getAttr(p) for p in edges}
         for plug,source in edges.items():c.connectAttr(source,plug)
         for plug,value in edited.items():_set(plug,value)
@@ -306,12 +306,12 @@ def before_drag(context):
                 _gesture['snapshots'].append(snapshot)
                 _gesture['prepared'].update(snapshot[0])
                 continue
-            if any(json.loads(c.getAttr(n+'.zeroChannelData'))['root']==root.rsplit('|',1)[-1] for n in generic):continue
+            if any(scene_data.read(n+'.zeroChannelData')['root']==root.rsplit('|',1)[-1] for n in generic):continue
             snapshot=prepare(root)
             _gesture['snapshots'].append(snapshot)
             _gesture['prepared'].update({p:c.getAttr(p) for p in snapshot[0]})
         # A co-selected ankle owns its input before roll handles share it.
-        generic.sort(key=lambda n:json.loads(c.getAttr(n+'.zeroChannelData'))['role']!='foot')
+        generic.sort(key=lambda n:scene_data.read(n+'.zeroChannelData')['role']!='foot')
         translation_routes={}
         for control in generic:
             c.autoKeyframe(state=False)
@@ -340,6 +340,7 @@ def before_drag(context):
         if native_plugs:
             snapshot=_snapshot(native_plugs);_gesture['snapshots'].append(snapshot)
             _gesture['prepared'].update(snapshot[0])
+        _gesture['native_plugs']=native_plugs
     except Exception:
         from .live_arm_manual import finish
         for entry in reversed(_gesture['arm_gestures']):finish(entry,cancel=True)
@@ -378,7 +379,7 @@ def _isolated_arm_rotation(root):
     """Only an isolated wrist rotation can use the local input calibration."""
     import maya.cmds as c
     if c.contextInfo(c.currentCtx(),c=True)!='manipRotate':return None
-    data=json.loads(c.getAttr(root+'.liveAlignmentData'))
+    data=scene_data.read(root+'.liveAlignmentData')
     if data['kind']!='arm':return None
     full=c.ls(root,long=True)[0]
     selected=[n for n in c.ls(sl=True,long=True,objectsOnly=True) or [] if n.startswith(full+'|')]
@@ -397,11 +398,30 @@ def _pole_hold_key_plugs(entries,changed_only=False):
             if changed_only and not child.get('changed'):continue
             root=child['data']['root'];pole=None
             if c.objExists(root+'.zeroPartData'):
-                pole=json.loads(c.getAttr(root+'.zeroPartData'))['sources'].get('pole_locator')
+                pole=scene_data.read(root+'.zeroPartData')['sources'].get('pole_locator')
             if pole:
                 plug=resolve(pole+'.translateZ')
                 if not c.getAttr(plug,lock=True):plugs.add(plug)
     return sorted(plugs)
+
+
+def _finish_arm_alignment(entries):
+    """Rebase once per FK arm, after all co-selected inputs are reconnected."""
+    from .live_arm_manual import _record_fallback
+    groups={}
+    for entry in entries:
+        children=entry.get('children',[entry])
+        eligible=[e for e in children if not e.get('shared_ik') and
+                  (not e.get('generic_zero') or e.get('fk_pole'))]
+        if not eligible or not entry['changed']:continue
+        root=entry['data']['root'];groups.setdefault(root.rsplit('|',1)[-1],[]).extend(eligible)
+    for group in groups.values():
+        root=group[0]['data']['root']
+        wrist_only=all(e['role']=='end_fk' and e['mode']=='manipRotate' for e in group)
+        try:prepare(root,wrist_only=wrist_only)
+        except PosePreservationError as exc:
+            for entry in group:entry['alignment_fallback']=True
+            _record_fallback(exc,'finish')
 
 
 def after_drag(context):
@@ -410,9 +430,22 @@ def after_drag(context):
     try:
         if _gesture:
             from .live_arm_manual import finish
-            for entry in _gesture.get('arm_gestures',[]):finish(entry)
+            entries=_gesture.get('arm_gestures',[])
+            # Read every handle before reconnecting or restoring a sibling.
+            # Reconnecting FK can otherwise look like a new mouse delta on a
+            # co-selected pole when its finish() samples the native channels.
+            update_drag()
+            deferred={e['data']['root'].rsplit('|',1)[-1] for e in entries if e.get('fk_pole')}
+            for entry in entries:finish(entry,align=entry['data']['root'].rsplit('|',1)[-1] not in deferred,sample=False)
+            _finish_arm_alignment([e for e in entries if e['data']['root'].rsplit('|',1)[-1] in deferred])
             # A click without a drag must not change animation or reset roll.
             changed=any(abs(c.getAttr(p)-v)>1e-8 for p,v in _gesture['prepared'].items() if c.objExists(p))
+            if entries and not any(e['changed'] for e in entries) and not any(
+                    abs(c.getAttr(p)-_gesture['prepared'][p])>1e-8 for p in _gesture.get('native_plugs',[])):
+                # A co-selected IK pole snapshots an intermediate calibrated
+                # FK state. A click must restore the original full gesture,
+                # even if those overlapping snapshots contain different values.
+                changed=False
             if not changed:
                 from .live_rotation import rollback
                 for entry in reversed(_gesture['rotation_layers']):rollback(entry)
@@ -458,6 +491,8 @@ def after_drag(context):
                     if curve and not existing and sample and abs(sample[0]-value)<1e-9:c.setKeyframe(plug,insert=True)
                     else:c.setKeyframe(plug,time=c.currentTime(q=True),value=value)
                     c.setAttr(plug,value)
+            from . import key_companions
+            key_companions.remember(_gesture)
             _fence('after',[_snapshot(values) for values,curves in _gesture['snapshots']])
     except Exception:
         # One failed arm must not leave the other selected arms disconnected.
@@ -480,6 +515,7 @@ def install():
     native manipulator reads the starting channels. Release cleanup is deferred
     until Maya has committed its own undo command.
     """
+    if globals().get('_runtime_disabled',False):return False
     import maya.cmds as c
     if c.about(batch=True):return False
     from . import native_constraints
@@ -497,6 +533,12 @@ def install():
                     mel.eval(command+' -edit -'+flag+' "" "'+typ+'" '+context+';')
     from .runtime_plugin import ensure_undo_command
     ensure_undo_command()
+    from . import foot_reach
+    foot_reach.install()
+    from . import reference_animation
+    reference_animation.prepare()
+    from . import key_companions
+    key_companions.install()
     try:
         from PySide2 import QtCore,QtWidgets
         from shiboken2 import getCppPointer

@@ -1,4 +1,5 @@
 """Pose-preserving head and knee spaces on the original controls."""
+from maya_agent.rigs import scene_data
 import json
 
 VERSION='1.0.0'
@@ -6,7 +7,7 @@ VERSION='1.0.0'
 
 def _data(control):
     import maya.cmds as c
-    return json.loads(c.getAttr(control+'.matchedSpaceData'))
+    return scene_data.read(control+'.matchedSpaceData')
 
 
 def enable(rig,space,role):
@@ -53,7 +54,7 @@ def switch(control,value,key=None,previous=None):
 
 def enable_character(root):
     import maya.cmds as c
-    rig=json.loads(c.getAttr(root+'.integratedRigData'));upgraded=[]
+    rig=scene_data.read(root+'.integratedRigData');upgraded=[]
     c.undoInfo(openChunk=True,chunkName='EnableCharacterHeadKneeSpaces')
     try:
         for key,part in rig['parts'].items():

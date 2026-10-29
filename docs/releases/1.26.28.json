@@ -1,0 +1,108 @@
+{
+  "core": "1.26.28",
+  "assistant": "1.0.6",
+  "maya": "2024.2",
+  "passed": true,
+  "single_file_sha256": "32461fdc15e7e5b7cbc50f8c2b44c8c0152423f96f694d5a41267c41435501b0",
+  "archive_sha256": "2f7eec412be96c8552928fcb91448d9886d2d66d00249fd744ffaa32f7ca7c5d",
+  "checks": {
+    "passed": true,
+    "single_file": true,
+    "clean_gui": true,
+    "gesture_cases": 18,
+    "max_rotation_error": 2.9531932455029164e-14,
+    "mode_switches": true,
+    "native_constraints": true,
+    "undo_redo": true,
+    "idempotent": true,
+    "shelf_install": true,
+    "automatic_scene_activation": true,
+    "toggle": true,
+    "references": {
+      "passed": true,
+      "references": 2,
+      "original_present": true,
+      "gesture_cases": 180,
+      "space_switches": 36,
+      "constraints": true,
+      "animation_unchanged": true,
+      "metadata_unchanged": true,
+      "save_reopen_reload": true,
+      "nested_reference": true,
+      "missing_object_warnings": []
+    },
+    "key_regression": {
+      "passed": true,
+      "native_S_cases": 13,
+      "references": 2,
+      "undo_redo": true,
+      "additive_layer": true,
+      "arm_layer_cases": 3,
+      "save_reopen": true,
+      "source_curves_unchanged": true,
+      "source_file_unchanged": true
+    },
+    "elbow": {
+      "passed": true,
+      "cases": 32,
+      "references": 2,
+      "source_unchanged": true,
+      "native_S": true,
+      "auto_key": true,
+      "half_weight_layer": true,
+      "undo_redo": true,
+      "save_reopen": true
+    },
+    "foot_reach": {
+      "passed": true,
+      "cases": 152,
+      "max_error": 3.552713678800501e-15,
+      "reference_count": 2,
+      "install_preserves_pose_and_keys": true,
+      "no_cycles": true,
+      "idempotent": true,
+      "undo_redo": true,
+      "save_reopen": true,
+      "remove_reinstall": true
+    },
+    "foot_input": {
+      "passed": true,
+      "cases": 40,
+      "max_error": 7.389644451905042e-13,
+      "rotation_routes_translation": true,
+      "native_S": true,
+      "undo_redo": true,
+      "overshoot_channels_bounded": true,
+      "scales": [
+        0.5,
+        2
+      ],
+      "stretch": true
+    },
+    "foot_compat": {
+      "passed": true,
+      "suites": [
+        {
+          "animated": false,
+          "extra": null,
+          "cases": 20
+        },
+        {
+          "animated": true,
+          "extra": null,
+          "cases": 20
+        },
+        {
+          "animated": true,
+          "extra": "layer",
+          "cases": 20
+        },
+        {
+          "animated": true,
+          "extra": "constraint",
+          "cases": 20
+        }
+      ]
+    }
+  }
+}

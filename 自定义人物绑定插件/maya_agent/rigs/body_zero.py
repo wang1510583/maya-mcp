@@ -1,4 +1,5 @@
 """Fixed per-mode rest frames; switch matching lives in animator channels."""
+from maya_agent.rigs import scene_data
 import json
 
 
@@ -39,7 +40,7 @@ def enable(part):
 def enable_character(root):
     """Explicit safe upgrade of an untouched zero body, never migrate curves."""
     import maya.cmds as c
-    rig=json.loads(c.getAttr(root+'.integratedRigData'))
+    rig=scene_data.read(root+'.integratedRigData')
     part=rig['parts']['body'];data=enable(part);part['body_drive']=data
     c.setAttr(root+'.integratedRigData',lock=False)
     c.setAttr(root+'.integratedRigData',json.dumps(rig,ensure_ascii=False),type='string',lock=True)

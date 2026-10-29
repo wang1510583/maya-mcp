@@ -3,6 +3,7 @@
 The displayed end position is DG-driven by the real mode. Handle translateX
 is only a transient mouse gesture, never an animation or rig driver.
 """
+from maya_agent.rigs import scene_data
 import json
 import math
 
@@ -14,7 +15,7 @@ if '_busy' not in globals():_busy=False
 
 def _read(node,attr):
     import maya.cmds as c
-    return json.loads(c.getAttr(node+'.'+attr))
+    return scene_data.read(node+'.'+attr)
 
 
 def targets(rig):
@@ -282,7 +283,7 @@ def _key_proxies(handle):
     mode=arm_ik._switch_module(owner)._data(owner)
     control=mode.get('control') or mode.get('fk_wrist') or mode['controls'][0]
     identity=mode.get('control_uuid') or mode.get('target_uuid')
-    if identity:control=(c.ls(identity,long=True) or [control])[0]
+    if identity:control=scene_data.resolve_uuid(identity,owner,control)
     from .zero_channels import surface
     control=surface(control)
     attrs=c.listAttr(control,keyable=True,unlocked=True,scalar=True) or []
@@ -363,6 +364,7 @@ def _finish(handle):
 
 def install():
     """Reinstall on plugin startup and scene open/import via arm_ik.install."""
+    if globals().get('_runtime_disabled',False):return 0
     import maya.cmds as c
     import maya.api.OpenMaya as om
     import maya.api.OpenMayaAnim as oma
@@ -372,7 +374,7 @@ def install():
             try:om.MMessage.removeCallback(entry['id'])
             except RuntimeError:pass
             _callbacks.pop(n,None)
-    handles=c.ls('*.spaceSliderData','*:*.spaceSliderData',objectsOnly=True) or []
+    handles=c.ls('::*.spaceSliderData',objectsOnly=True) or []
     for n in handles:
         if n in _callbacks:continue
         sl=om.MSelectionList();sl.add(n);obj=sl.getDependNode(0)
@@ -390,7 +392,7 @@ def install():
 
 def build_selected():
     import maya.cmds as c
-    roots=c.ls('*.integratedRigData','*:*.integratedRigData',objectsOnly=True) or []
+    roots=c.ls('::*.integratedRigData',objectsOnly=True) or []
     selection=c.ls(sl=True,long=True) or []
     candidates=[r for r in roots if any(r in (c.ls(n,long=True) or [''])[0] or n.rsplit('|',1)[-1].startswith(r.rsplit(':',1)[0]+'_') for n in selection)]
     if len(candidates)==1:return build(candidates[0])

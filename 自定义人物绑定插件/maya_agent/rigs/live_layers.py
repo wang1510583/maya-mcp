@@ -1,4 +1,5 @@
 """Maya animation-layer routing for live gestures; never flattens a layer stack."""
+from maya_agent.rigs import scene_data
 
 
 def blend_nodes():
@@ -37,7 +38,7 @@ def edit_layer(roots=(),extra_plugs=()):
     layers=c.ls(type='animLayer') or []
     if len(layers)<2:return None
     if roots:
-        plugs=[e['proxy'] for root in roots if c.objExists(root+'.liveAlignmentData') for e in json.loads(c.getAttr(root+'.liveAlignmentData'))['entries']]
+        plugs=[e['proxy'] for root in roots if c.objExists(root+'.liveAlignmentData') for e in scene_data.read(root+'.liveAlignmentData')['entries']]
         plugs.extend(extra_plugs)
         from . import arm_ik_shared,arm_ik
         for root in roots:

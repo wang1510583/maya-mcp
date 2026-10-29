@@ -3,6 +3,7 @@
 Only the named recalculation procedure and this plugin's marked rigs are
 handled. The vendor's original targets and alignment algorithm remain intact.
 """
+from maya_agent.rigs import scene_data
 import json
 
 if '_callback' not in globals():_callback=None
@@ -10,10 +11,13 @@ if '_session' not in globals():_session=None
 
 
 def install():
+    if globals().get('_runtime_disabled',False):return
     import maya.api.OpenMaya as om
     global _callback
     if _callback is not None:return
     def procedure(name,identity,entering,kind,*_):
+        from . import key_companions
+        key_companions.procedure(name,identity,entering,kind,*_)
         if name!='kurok_recalculate_system':return
         if entering:_begin(identity)
         elif _session and _session['identity']==identity:_finish()
@@ -28,12 +32,12 @@ def _begin(identity):
     roots=[]
     for n in c.ls(sl=True,long=True,objectsOnly=True) or []:
         if c.objExists(n+'.zeroChannelData'):
-            roots.append(json.loads(c.getAttr(n+'.zeroChannelData'))['root'])
+            roots.append(scene_data.read(n+'.zeroChannelData')['root'])
     if not roots:return
     entries=[]
     for root in dict.fromkeys(roots):
         if not c.objExists(root+'.zeroPartData'):continue
-        d=json.loads(c.getAttr(root+'.zeroPartData'))
+        d=scene_data.read(root+'.zeroPartData')
         registry=root.rsplit(':',1)[0]+':recalculate_node'
         if not c.objExists(registry):continue
         animated=set()
@@ -42,7 +46,7 @@ def _begin(identity):
                 animated.update(c.listConnections(registry+'.'+a,s=True,d=False) or [])
         for role,source in d['sources'].items():
             if source not in animated or role not in d['controls']:continue
-            control=d['controls'][role];offsets=json.loads(c.getAttr(control+'.zeroChannelData'))['offsets']
+            control=d['controls'][role];offsets=scene_data.read(control+'.zeroChannelData')['offsets']
             for attr in offsets:
                 plug=source+'.'+attr;edge=c.connectionInfo(plug,sfd=True)
                 if edge and not c.getAttr(plug,lock=True):entries.append((plug,edge,control+'.'+attr,c.getAttr(plug)))

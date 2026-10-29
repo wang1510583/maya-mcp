@@ -98,17 +98,24 @@ def run(animated=False,extra=None):
         live_edit.before_drag('test');live_edit.after_drag('test')
         assert error(baseline)<1e-6 and curves(saved)==saved
         report['no_op']=True
-        # Rotation still belongs to the chosen roll controller, not the foot.
-        c.autoKeyframe(state=False);c.setToolTo('RotateSuperContext')
+        # Rotation remains on the roll; its translation compensation belongs
+        # to the ankle for heel/toe-end, preserving the completed solver pose.
+        c.autoKeyframe(state=animated);c.setToolTo('RotateSuperContext')
         for role in ('heel','toe_end','ball'):
             p=rig['parts']['leg_L'];handle=p['zero_controls'][role];foot=p['zero_controls']['foot']
             foot_before=c.getAttr(foot+'.translate')[0]
+            roll_before=c.getAttr(handle+'.translate')[0]
             c.select(handle,r=True);live_edit.before_drag('test')
             assert not any(e.get('foot_move') for e in live_edit._gesture['arm_gestures'])
             c.setAttr(handle+'.rx',c.getAttr(handle+'.rx')+4);live_edit.update_drag(force=True)
             held=pose(watched);live_edit.after_drag('test')
             assert error(held)<1e-5
-            assert c.getAttr(foot+'.translate')[0]==foot_before
+            assert c.getAttr(handle+'.translate')[0]==roll_before
+            if animated:
+                c.undoInfo(stateWithoutFlush=False)
+                try:c.currentTime(3.5);c.currentTime(3)
+                finally:c.undoInfo(stateWithoutFlush=True)
+                assert error(held)<1e-5,('rotation replay',extra,role,error(held))
             c.undo()
         report['rotation_preserved']=True;report['passed']=True
     except Exception:

@@ -49,7 +49,7 @@ def preflight(parts):
                 row,_=inspect([name],allow_animation=True,minimum_count=1,allow_parent_drivers=True)
                 samples.extend(row)
         else:
-            samples,_=inspect(names,allow_animation=copy,minimum_count=1 if part['kind']=='shoulder' else 2,allow_parent_drivers=True)
+            samples,_=inspect(names,allow_animation=copy,minimum_count=1 if part['kind'] in ('shoulder','head') else 2,allow_parent_drivers=True)
         for sample in samples:
             if sample['node'] in seen:raise ValueError('同一目标不能载入多个部位：'+sample['node'])
             seen.add(sample['node'])
@@ -378,6 +378,10 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
         c.setAttr(root+'.integratedRigData',json.dumps(result,ensure_ascii=False),type='string',lock=True)
         return result
     except Exception:
+        # Master scaling also touches original OPM and skin matrix inputs. Restore
+        # those before deleting the newly owned graph on a late assembly failure.
+        from .master_scale import rollback as rollback_master_scale
+        if c.objExists(namespace+':character_rig'):rollback_master_scale({'root':namespace+':character_rig'})
         for t in transfers:t.release_backup()
         # Remove constraints across ALL owned parts before deleting any driver.
         for ns in owned+[namespace]:

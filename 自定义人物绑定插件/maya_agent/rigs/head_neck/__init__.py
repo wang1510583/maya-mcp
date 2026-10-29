@@ -1,7 +1,7 @@
 """Reference-style head and neck: independent head, blended neck orientation."""
 import math
 
-VERSION='1.1.0'
+VERSION='1.2.0'
 CHANNELS=tuple(p+a for p in ('translate','rotate') for a in 'XYZ')
 
 
@@ -9,15 +9,15 @@ def build(item,targets,namespace,chest=None):
     """Internal integrated constructor; source motion is captured before entry."""
     import maya.cmds as c
     import maya.api.OpenMaya as om
+    frame=c.currentTime(q=True);poses=item['motion'][frame]
+    count=len(poses)
+    if not 1<=count<=64 or len(targets)!=count:raise ValueError('头颈需要 1–64 个目标；最后一个是头，其余是脖子。')
     c.namespace(add=namespace)
     root=c.createNode('transform',name=namespace+':rig_root')
     # The reference's controls share an upright character frame, rather than
     # inheriting differently oriented bone axes. Bind offsets drive the bones.
     if c.upAxis(q=True,axis=True)=='y':c.setAttr(root+'.rotateX',-90)
     control_frame=c.xform(root,q=True,ws=True,m=True)
-    frame=c.currentTime(q=True);poses=item['motion'][frame]
-    count=len(poses)
-    if not 2<=count<=64:raise ValueError('头颈需要至少一根颈骨和一个头部目标。')
     def matrix(pose):
         m=list(pose['rotation']);m[12:15]=pose['pivot'];return m
     if not chest:
@@ -55,6 +55,7 @@ def build(item,targets,namespace,chest=None):
     # Position drives the head's own translation, never its parent matrix.
     # Neck orientation reads head.rotate + parentMatrix, so this keeps the
     # point-follow and rotation-blend graphs acyclic, as in the reference file.
+    # With no neck controls, previous is the chest/root reference itself.
     head_anchor=c.createNode('transform',name=namespace+':head_anchor',parent=previous)
     c.xform(head_anchor,ws=True,t=poses[-1]['pivot'])
     c.setAttr(head_anchor+'.visibility',False)

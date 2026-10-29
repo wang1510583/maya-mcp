@@ -1,4 +1,5 @@
 """Appendable props with parent/master spaces and pose-preserving switches."""
+from maya_agent.rigs import scene_data
 import json
 
 
@@ -120,7 +121,7 @@ def ensure_controller(character,owner,pose_samples=None):
 
 def upgrade_controls(character):
     import maya.cmds as c
-    rig=json.loads(c.getAttr(character+'.integratedRigData'))
+    rig=scene_data.read(character+'.integratedRigData')
     c.undoInfo(openChunk=True,chunkName='UpgradeGenericControls')
     try:return [ensure_controller(character,row['owner']) for row in rig.get('generic_objects',[])]
     finally:c.undoInfo(closeChunk=True)
@@ -128,7 +129,7 @@ def upgrade_controls(character):
 
 def _data(owner):
     import maya.cmds as c
-    return json.loads(c.getAttr(owner+'.genericSpaceData'))
+    return scene_data.read(owner+'.genericSpaceData')
 
 
 def resolve_character(parent):
@@ -136,7 +137,7 @@ def resolve_character(parent):
     roots=c.ls('*.integratedRigData','*:*.integratedRigData',o=True,l=True) or []
     path=c.ls(parent,l=True)[0]; candidates=[]
     for root in roots:
-        rig=json.loads(c.getAttr(root+'.integratedRigData'))
+        rig=scene_data.read(root+'.integratedRigData')
         nodes=[root,rig.get('master_control')]+[p['root'] for p in rig['parts'].values()]
         targets=[m['target'] for p in rig['parts'].values() for m in p.get('original_target_mapping',[])]
         paths=[c.ls(n,l=True)[0] for n in nodes+targets if n and c.objExists(n)]
@@ -179,7 +180,7 @@ def _add_new(target,parent,character=None,_number=None,_node_number=None,_ignore
             raise ValueError('此物件已连接通用绑定，不能重复创建。')
     if not c.undoInfo(q=True,state=True):raise ValueError('请先开启 Maya 撤销。')
     character=character or resolve_character(parent)
-    rig=json.loads(c.getAttr(character+'.integratedRigData'))
+    rig=scene_data.read(character+'.integratedRigData')
     identity=c.ls(target,uuid=True)[0]
     for owner in c.ls('::*.genericSpaceData',o=True) or []:
         if owner==_ignored_owner:continue
@@ -247,7 +248,7 @@ def _add_new(target,parent,character=None,_number=None,_node_number=None,_ignore
         c.addAttr(owner,ln='genericSpaceData',dt='string');c.setAttr(owner+'.genericSpaceData',json.dumps(data),type='string',lock=True)
         if not marker_exists:c.addAttr(target,ln='genericSpaceOwner',at='message')
         c.connectAttr(owner+'.message',target+'.genericSpaceOwner')
-        rig=json.loads(c.getAttr(character+'.integratedRigData'));rig.setdefault('generic_objects',[]).append(data)
+        rig=scene_data.read(character+'.integratedRigData');rig.setdefault('generic_objects',[]).append(data)
         c.setAttr(character+'.integratedRigData',lock=False);c.setAttr(character+'.integratedRigData',json.dumps(rig,ensure_ascii=False),type='string',lock=True)
         from maya_agent.rigs import arm_ik
         arm_ik.install()

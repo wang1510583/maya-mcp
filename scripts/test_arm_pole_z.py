@@ -1,4 +1,8 @@
-"""Only direct elbow gestures may alter the animator's pole Z channel."""
+"""Historical v1.26.24 hold-Z policy, superseded by FK absorption in v1.26.25.
+
+Current FK and world-IK coverage lives in test_elbow_absorption.py. Retained as
+an explicit historical diagnostic, not a regression expectation for the new UX.
+"""
 import uuid
 import maya.cmds as c
 from scripts.test_integrated_rig_live import fixture,remove
@@ -6,7 +10,7 @@ from maya_agent.rigs.integrated import build
 from maya_agent.rigs import live_edit,live_arm_manual,arm_ik
 
 
-def verify():
+def verify_legacy_hold_policy():
     before=set(c.ls(l=True));selected=c.ls(sl=True,l=True);time=c.currentTime(q=True)
     auto=c.autoKeyframe(q=True,state=True);context=c.currentCtx();rig=None
     flags={l:{a:c.animLayer(l,q=True,**{a:True}) for a in ('selected','preferred')} for l in c.ls(type='animLayer')}

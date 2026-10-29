@@ -1,10 +1,11 @@
 """Matched chest global using four independent body-direction/space states."""
+from maya_agent.rigs import scene_data
 import json
 
 
 def _data(control):
     import maya.cmds as c
-    return json.loads(c.getAttr(control+'.chestSpaceData'))
+    return scene_data.read(control+'.chestSpaceData')
 
 
 def enable(rig):

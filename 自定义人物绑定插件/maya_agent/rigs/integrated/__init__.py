@@ -1,5 +1,5 @@
 """Selection-driven character assembly of the custom body, arm and leg modules."""
-VERSION='1.26.18'
+VERSION='1.26.28'
 PARTS={
     'hand_R':dict(label='右手指',kind='hand',side='R',count=None),
     'hand_L':dict(label='左手指',kind='hand',side='L',count=None),

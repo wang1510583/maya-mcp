@@ -1,4 +1,5 @@
 """Two acyclic body translation solves sharing the existing animator controls."""
+from maya_agent.rigs import scene_data
 import json
 
 VERSION='1.1.1'
@@ -6,7 +7,7 @@ VERSION='1.1.1'
 
 def _data(control):
     import maya.cmds as c
-    return json.loads(c.getAttr(control+'.bodyDriveData'))
+    return scene_data.read(control+'.bodyDriveData')
 
 
 def enable(rig):
@@ -143,6 +144,6 @@ def switch(control,value,key=None,previous=None):
 
 def enable_character(root):
     import maya.cmds as c
-    rig=json.loads(c.getAttr(root+'.integratedRigData'));data=enable(rig['parts']['body'])
+    rig=scene_data.read(root+'.integratedRigData');data=enable(rig['parts']['body'])
     c.setAttr(root+'.integratedRigData',lock=False);c.setAttr(root+'.integratedRigData',json.dumps(rig,ensure_ascii=False),type='string',lock=True)
     return data

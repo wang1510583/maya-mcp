@@ -4,6 +4,7 @@ Only a mouse gesture is isolated. No reference curves, historical matrices or
 animated helper transforms are created. The original limb graph still evaluates
 playback; all committed keys belong to the existing visible FK controllers.
 """
+from maya_agent.rigs import scene_data
 import json
 import math
 
@@ -14,7 +15,7 @@ TR=tuple('translate'+a for a in 'XYZ')+ROT
 
 def selected_role(root):
     import maya.cmds as c
-    data=json.loads(c.getAttr(root+'.liveAlignmentData'))
+    data=scene_data.read(root+'.liveAlignmentData')
     if data['kind']!='arm':return None
     selected=c.ls(sl=True,long=True,objectsOnly=True) or []
     for role,proxy in data['controls'].items():
@@ -26,7 +27,7 @@ def begin(root,role):
     import maya.cmds as c
     import maya.api.OpenMaya as om
     from .live_edit import _snapshot
-    data=json.loads(c.getAttr(root+'.liveAlignmentData'))
+    data=scene_data.read(root+'.liveAlignmentData')
     inputs=data['inputs'];controls=data['controls']
     if any(c.objExists(n+'.liveRotationData') for n in inputs.values()):
         raise ValueError('此手臂还包含旧版隐藏旋转参考，请先迁移旧动画。')

@@ -1,4 +1,5 @@
 """Matched world/hips spaces on the original foot controller."""
+from maya_agent.rigs import scene_data
 import json
 
 VERSION='1.0.0'
@@ -6,7 +7,7 @@ VERSION='1.0.0'
 
 def _data(root):
     import maya.cmds as c
-    return json.loads(c.getAttr(root+'.footSpaceData'))
+    return scene_data.read(root+'.footSpaceData')
 
 
 def _enum(plug,proxy):
@@ -70,7 +71,7 @@ def _switch_data(data,value,key,previous,key_writer,label):
         source=data['source']
         destinations={}
         if c.objExists(root+'.liveAlignmentData'):
-            live=json.loads(c.getAttr(root+'.liveAlignmentData'));destinations={e['source']:e['proxy'] for e in live['entries']}
+            live=scene_data.read(root+'.liveAlignmentData');destinations={e['source']:e['proxy'] for e in live['entries']}
         destinations.update(data.get('destinations',{}))
         plugs=[destinations.get(source+'.'+a,source+'.'+a) for a in live_edit.TR]+[plug]
         snapshot=live_edit._snapshot(plugs);fences.append(snapshot)
@@ -104,7 +105,7 @@ def _switch_data(data,value,key,previous,key_writer,label):
 
 def enable_character(root):
     import maya.cmds as c
-    rig=json.loads(c.getAttr(root+'.integratedRigData'));upgraded=[]
+    rig=scene_data.read(root+'.integratedRigData');upgraded=[]
     c.undoInfo(openChunk=True,chunkName='EnableCharacterFootSpaces')
     try:
         for key,part in rig['parts'].items():
