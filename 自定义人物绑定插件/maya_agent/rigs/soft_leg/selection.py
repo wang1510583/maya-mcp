@@ -130,6 +130,8 @@ def build_from_selection(targets=None,namespace='customLeg',drive_targets=True,c
             if rig:cleanup(rig['namespace'])
             if transfer:transfer.rollback()
             elif not copy_animation:restore(samples)
+            from maya_agent.rigs.rotation_limits import restore as restore_limits
+            restore_limits(samples)
             raise
         finally:
             if transfer:c.currentTime(transfer.time)

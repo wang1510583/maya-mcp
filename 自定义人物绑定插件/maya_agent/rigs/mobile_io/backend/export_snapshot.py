@@ -8,6 +8,12 @@ import json
 from pathlib import Path
 
 import maya.cmds as c
+import runpy
+from pathlib import Path
+identity_io=runpy.run_path(str(Path(__file__).with_name('mobile_identity.py')))
+node_identity=identity_io['identity']
+resolve_identity=identity_io['resolve']
+read_metadata=identity_io['read']
 import maya.api.OpenMaya as om
 import maya.api.OpenMayaAnim as oma
 
@@ -19,7 +25,7 @@ def dag(node):
 
 
 def uuid(node):
-    return c.ls(node, uuid=True)[0]
+    return node_identity(node)
 
 
 def numbers(values):
@@ -52,14 +58,14 @@ def export(root, path, selection=None):
     import runpy
     selection_module=runpy.run_path(str(Path(__file__).with_name('export_selection.py')))
     scope=selection_module['resolve'](root,selection) if selection is not None else dict(meshes=[],joints=[],cameras=[],selection=[])
-    metadata = json.loads(c.getAttr(root + '.integratedRigData'))
+    metadata = read_metadata(root + '.integratedRigData')
     controls, targets, warnings = [], [], []
     definitions=dict(metadata['parts'])
     if metadata.get('master_control'):
         definitions['character']={'controls':{'master':metadata['master_control']}}
     for item in metadata.get('generic_objects',[]):
-        control=c.ls(item['control_uuid'],long=True)[0]
-        target=c.ls(item['target_uuid'],long=True)[0]
+        control=identity_io['registered'](item['control_uuid'], root)
+        target=identity_io['registered'](item['target_uuid'], root)
         definitions['generic_'+str(item['number'])]={'controls':{'prop':control},'original_target_mapping':[{'target':target}]}
     for part, definition in definitions.items():
         mapping = dict(definition.get('controls', {}))
@@ -157,7 +163,7 @@ def export(root, path, selection=None):
                            'skin': {'id':uuid(skin), 'name':skin,
                                     'method':c.getAttr(skin+'.skinningMethod'),
                                     'influences':[{'id':uuid(i.fullPathName()), 'path':i.fullPathName(),
-                                        'bindPreMatrix':numbers(c.getAttr(skin+'.bindPreMatrix[%d]' % skinfn.indexForInfluenceObject(i)))} for i in influences],
+                                        'logicalIndex':skinfn.indexForInfluenceObject(i), 'bindPreMatrix':numbers(c.getAttr(skin+'.bindPreMatrix[%d]' % skinfn.indexForInfluenceObject(i)))} for i in influences],
                                     'weights':sparse},
                            'vertexSpace':'evaluated_world_at_snapshot_frame'})
     selection_module['append_rigid'](meshes,joint_nodes,scope['meshes'])

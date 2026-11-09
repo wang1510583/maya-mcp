@@ -6,6 +6,12 @@ The portable graph must be validated against every emitted frame before shipping
 import json, math, runpy, hashlib
 from pathlib import Path
 import maya.cmds as c
+import runpy
+from pathlib import Path
+identity_io=runpy.run_path(str(Path(__file__).with_name('mobile_identity.py')))
+node_identity=identity_io['identity']
+resolve_identity=identity_io['resolve']
+read_metadata=identity_io['read']
 import maya.api.OpenMaya as om
 
 ATTRS=('rotateX','rotateY','rotateZ','translateX','translateY','translateZ')
@@ -16,7 +22,7 @@ def export(snapshot_path, graph_path, destination, reference_path):
     assert graph['sourceSnapshotSha256']==hashlib.sha256(raw).hexdigest()
     for row in snap.get('controls',[]):
         if not row.get('inputOnly') and 'rotateOrder' in row:
-            nodes=c.ls(row['id'],long=True) or []
+            nodes=[resolve_identity(row['id'])]
             if len(nodes)!=1 or c.getAttr(nodes[0]+'.rotateOrder')!=row['rotateOrder']:
                 raise ValueError('控制器旋转顺序与工程不一致，请重新导出工程：'+row.get('name',row['id']))
     for path in (destination,reference_path):
@@ -31,11 +37,11 @@ def export(snapshot_path, graph_path, destination, reference_path):
     counts=Counter(r['part']+'/'+r['role'] for r in snap['controls'])
     labels={(r['part']+'/'+r['role']+('/'+r['id'] if counts[r['part']+'/'+r['role']]>1 else '')):r['id'] for r in snap['controls']}
     reverse={v:k for k,v in labels.items()}
-    controls={r['id']:c.ls(r.get('nodeId',r['id']),long=True)[0] for r in snap['controls']}
-    joints={r['id']:c.ls(r['id'],long=True)[0] for r in snap['joints']}
+    controls={r['id']:resolve_identity(r.get('nodeId',r['id'])) for r in snap['controls']}
+    joints={r['id']:resolve_identity(r['id']) for r in snap['joints']}
     meshes={}
     for m in snap['meshes']:
-        sel=om.MSelectionList();sel.add(c.ls(m['id'],long=True)[0]);meshes[m['id']]=om.MFnMesh(sel.getDagPath(0))
+        sel=om.MSelectionList();sel.add(resolve_identity(m['id']));meshes[m['id']]=om.MFnMesh(sel.getDagPath(0))
     def outputs():
         out={'controls':{uid:c.xform(n,q=True,ws=True,m=True) for uid,n in controls.items()},
              'joints':{uid:c.xform(n,q=True,ws=True,m=True) for uid,n in joints.items()},'vertices':{}}
@@ -59,6 +65,9 @@ def export(snapshot_path, graph_path, destination, reference_path):
     try:
         for frame in range(start,end+1):
             c.currentTime(frame,edit=True)
+            # Rebuilt Euler/zero-control graphs can retain stale hidden transforms
+            # in Maya evaluation caches. Sample after a full graph invalidation.
+            c.dgdirty(allPlugs=True);c.refresh(force=True)
             values={}
             for op in inputs:
                 d=op['data'];axis=d['axis'];base=d['base']*(180/math.pi if axis<3 else 1)
@@ -76,7 +85,7 @@ def export(snapshot_path, graph_path, destination, reference_path):
     # camera markers. Re-exporting only animation can upgrade an existing project.
     camera_shapes=[]
     for row in snap.get('cameras',[]):
-        found=c.ls(row['id'],long=True) or []
+        found=[resolve_identity(row['id'])]
         if len(found)!=1 or c.nodeType(found[0])!='camera':raise ValueError('工程相机 UUID 不匹配')
         camera_shapes.append(found[0])
     camera_rows=runpy.run_path(str(Path(__file__).with_name('export_cameras.py')))['capture'](camera_shapes,start,end)

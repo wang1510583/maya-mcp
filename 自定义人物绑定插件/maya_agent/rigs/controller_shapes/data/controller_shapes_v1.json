@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "linear_unit": "cm",
   "parts": {
     "body": {
@@ -1140,7 +1140,12 @@
             ]
           }
         }
-      }
+      },
+      "artwork_axis": [
+        -1,
+        0,
+        0
+      ]
     },
     "shoulder_L": {
       "metrics": {
@@ -1301,7 +1306,12 @@
             ]
           }
         }
-      }
+      },
+      "artwork_axis": [
+        1,
+        0,
+        0
+      ]
     },
     "arm_R": {
       "metrics": {

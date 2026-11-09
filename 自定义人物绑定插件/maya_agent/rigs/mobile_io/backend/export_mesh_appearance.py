@@ -2,6 +2,12 @@
 import base64, hashlib, math, os
 from pathlib import Path
 import maya.cmds as c
+import runpy
+from pathlib import Path
+identity_io=runpy.run_path(str(Path(__file__).with_name('mobile_identity.py')))
+node_identity=identity_io['identity']
+resolve_identity=identity_io['resolve']
+read_metadata=identity_io['read']
 import maya.api.OpenMaya as om
 from PySide2.QtCore import QByteArray, QBuffer, QIODevice
 from PySide2.QtGui import QImage
@@ -63,7 +69,7 @@ def appearance(snapshot, sha):
         row.update(color=[1.,1.,1.],texture=key)
         return row
     for mesh in snapshot['meshes']:
-        node=c.ls(mesh['id'],long=True)[0];selection=om.MSelectionList();selection.add(node)
+        node=resolve_identity(mesh['id']);selection=om.MSelectionList();selection.add(node)
         dag=selection.getDagPath(0);fn=om.MFnMesh(dag);counts,triangles=fn.getTriangles()
         if list(triangles)!=mesh['triangles']:raise ValueError('Texture topology differs from snapshot')
         shaders, assignments=fn.getConnectedShaders(dag.instanceNumber())

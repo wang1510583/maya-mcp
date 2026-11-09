@@ -3,6 +3,12 @@ import math, runpy
 from pathlib import Path
 from functools import lru_cache
 import maya.cmds as c
+import runpy
+from pathlib import Path
+identity_io=runpy.run_path(str(Path(__file__).with_name('mobile_identity.py')))
+node_identity=identity_io['identity']
+resolve_identity=identity_io['resolve']
+read_metadata=identity_io['read']
 import maya.api.OpenMaya as om
 
 
@@ -39,7 +45,7 @@ def capture(shapes,start,end):
     aspect=float(c.getAttr('defaultResolution.deviceAspectRatio'))
     if not .1<=aspect<=10:raise ValueError('无效的 Maya 渲染画幅比例。')
     before=c.currentTime(q=True);modified=c.file(q=True,modified=True)
-    result=[dict(id=c.ls(s,uuid=True)[0],name=s.split('|')[-1],path=s,aspect=aspect,start=start,keyFrames=key_frames(s,start,end),sourceCurves=camera_io()["capture"](s),samples=[]) for s in shapes]
+    result=[dict(id=node_identity(s),name=s.split('|')[-1],path=s,aspect=aspect,start=start,keyFrames=key_frames(s,start,end),sourceCurves=camera_io()["capture"](s),samples=[]) for s in shapes]
     try:
         for frame in range(start,end+1):
             c.currentTime(frame,edit=True)

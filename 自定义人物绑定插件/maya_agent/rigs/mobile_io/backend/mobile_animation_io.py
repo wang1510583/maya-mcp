@@ -5,6 +5,12 @@ import math
 from pathlib import Path
 from datetime import datetime
 import maya.cmds as cmds
+import runpy
+from pathlib import Path
+identity_io=runpy.run_path(str(Path(__file__).with_name('mobile_identity.py')))
+node_identity=identity_io['identity']
+resolve_identity=identity_io['resolve']
+read_metadata=identity_io['read']
 
 ATTRS = ('rotateX','rotateY','rotateZ','translateX','translateY','translateZ')
 ATTR_NAME = __import__('re').compile(r'^[A-Za-z_][A-Za-z0-9_]*$')
@@ -35,12 +41,8 @@ def snapshot_base(snapshot, bindings):
     return result
 
 def resolve(uid):
-    try:
-        nodes=cmds.ls(uid,long=True) or []  # uuid=True would return identifiers, not paths.
-    except RuntimeError as exc:
-        raise ValueError('无效或不存在的 UUID: '+str(uid)) from exc
-    if len(nodes)!=1: raise ValueError('UUID 未唯一匹配: '+str(uid))
-    return nodes[0]
+    return resolve_identity(uid)
+
 
 def driven_attribute_target(node, attr):
     """Return the writable source plug for a mirrored zero/control attribute."""
@@ -59,16 +61,16 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
     if not cid: raise ValueError('缺少 characterId')
     root=resolve(cid)
     if not cmds.attributeQuery('integratedRigData',node=root,exists=True): raise ValueError('非本套绑定')
-    meta=json.loads(cmds.getAttr(root+'.integratedRigData'))
+    meta=read_metadata(root+'.integratedRigData')
     if str(meta.get('version'))!=str(package.get('rigVersion')): raise ValueError('绑定版本不匹配')
     registered=set()
     for part in meta.get('parts',{}).values():
         for field in ('controls','zero_controls'):
             for node in part.get(field,{}).values():
                 if cmds.objExists(node): registered.update(cmds.ls(node,long=True) or [])
-    if meta.get('master_control'):registered.add(resolve(cmds.ls(meta['master_control'],uuid=True)[0]))
+    if meta.get('master_control'):registered.add(cmds.ls(meta['master_control'],long=True)[0])
     for item in meta.get('generic_objects',[]):
-        if item.get('control_uuid'):registered.add(resolve(item['control_uuid']))
+        if item.get('control_uuid'):registered.add(identity_io['registered'](item['control_uuid'],root))
     # Reconstruct the allowed private input table from this live character,
     # never trust arbitrary destination plugs supplied in a phone file.
     import runpy
@@ -147,6 +149,7 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
                     value+=base[uid][attr]
                 plug=bindings[uid]['inputPlugs'][ATTRS.index(attr)] if uid in bindings else node+'.'+attr
                 if not plug:raise ValueError('未登记的内部输入通道: '+uid+'.'+attr)
+                if bindings.get(uid,{}).get('role')=='overallScale' and value<0.001:raise ValueError('整体缩放不能小于 0.001')
                 if uid in mode_ids and value not in (0,1):raise ValueError('模式关键帧必须为 0 或 1')
                 if source_animation and cmds.getAttr(plug,lock=True):
                     # Locked baked reference curves are playback inputs, never
@@ -155,11 +158,10 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
                     if uid in smooth or spec is None:raise ValueError('不能编辑锁定的内部参考动画：'+plug)
                     if plug not in validated_readonly:
                         current=curve_io['capture'](plug)
-                        fields=[k for k in spec if k!='staticValue' or not spec['times']]
-                        if any(current.get(k)!=spec[k] for k in fields):raise ValueError('内部参考动画已改变，请重新导出工程：'+plug)
+                        if not curve_io['same_source_curve'](current,spec):raise ValueError('内部参考动画已改变，请重新导出工程：'+plug)
                         validated_readonly.add(plug)
                     continue
-                if cmds.getAttr(plug,lock=True) or cmds.referenceQuery(node,isNodeReferenced=True): raise ValueError('锁定通道或引用节点: '+plug)
+                if cmds.getAttr(plug,lock=True): raise ValueError('锁定通道或引用节点: '+plug)
                 drivers=cmds.listConnections(plug,source=True,destination=False) or []
                 if any(cmds.nodeType(n) not in ('animCurveTA','animCurveTL','animCurveTU') for n in drivers): raise ValueError('约束、动画层或其他驱动通道: '+plug)
                 operations.append((plug,frame,value));tangent_modes[plug]='step' if uid in step_ids else 'autoease' if uid in smooth else 'linear'
@@ -168,7 +170,7 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
                 if (uid,attr) in static_channels:static_plugs[plug]=value
             for attr,value in attributes.items():
                 plug=driven_attribute_target(node,attr)
-                if cmds.getAttr(plug,lock=True) or cmds.referenceQuery(node,isNodeReferenced=True): raise ValueError('锁定通道或引用节点: '+plug)
+                if cmds.getAttr(plug,lock=True): raise ValueError('锁定通道或引用节点: '+plug)
                 drivers=cmds.listConnections(plug,source=True,destination=False) or []
                 if any(cmds.nodeType(n) not in ('animCurveTA','animCurveTL','animCurveTU','animCurveUU','animCurveUL','animCurveUA') for n in drivers): raise ValueError('约束、动画层或其他驱动通道: '+plug)
                 operations.append((plug,frame,value));tangent_modes[plug]='autoease' if uid in smooth else 'linear'
@@ -187,14 +189,7 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
     if not cmds.undoInfo(q=True,state=True): raise RuntimeError('撤销关闭，无法安全回滚')
     backup={'scene':cmds.file(q=True,sn=True),'package':str(path),'channels':{}}
     for plug in sorted({op[0] for op in operations}):
-        data={'value':cmds.getAttr(plug),'times':cmds.keyframe(plug,q=True,tc=True) or [],'values':cmds.keyframe(plug,q=True,vc=True) or []}
-        for flag in ('inTangentType','outTangentType','inAngle','outAngle','inWeight','outWeight','weightedTangents','lock','weightLock'):
-            data[flag]=cmds.keyTangent(plug,q=True,**{flag:True}) or []
-        data['breakdownTimes']=cmds.keyframe(plug,q=True,breakdown=True,tc=True) or []
-        drivers=cmds.listConnections(plug,source=True,destination=False,type='animCurve') or []
-        if drivers:
-            for field in ('preInfinity','postInfinity','rotationInterpolation'):
-                if cmds.attributeQuery(field,node=drivers[0],exists=True):data[field]=cmds.getAttr(drivers[0]+'.'+field)
+        data=curve_io['capture'](plug);data['value']=data['staticValue']
         backup['channels'][plug]=data
     folder=Path(backup_directory) if backup_directory else Path(path).parent/'maya-animation-backups';folder.mkdir(parents=True,exist_ok=True)
     backup_path=folder/(datetime.now().strftime('%Y%m%d-%H%M%S-%f')+'.json')
@@ -205,6 +200,21 @@ def apply(path,dry_run=False,snapshot_path=None,backup_directory=None):
     previous_busy=arm_ik._busy;arm_ik._busy=True
     cmds.undoInfo(openChunk=True,chunkName='MayaMobileAnimationImport')
     try:
+        # Native key commands can silently write zero keys on referenced curves.
+        # Localize only this import's validated writable inputs, within its undo
+        # transaction. Never mutate the referenced asset or another instance.
+        local_curves={}
+        for plug in sorted({op[0] for op in operations}):
+            drivers=cmds.listConnections(plug,source=True,destination=False,type='animCurve') or []
+            if not drivers or not cmds.referenceQuery(drivers[0],isNodeReferenced=True):continue
+            source=drivers[0]
+            if any(cmds.lockNode(source,q=True,lock=True)):
+                raise ValueError('动画曲线已锁定：'+source)
+            started=True
+            if source not in local_curves:
+                local_curves[source]=cmds.duplicate(source,inputConnections=True,name='bencaoMobileAnimation#')[0]
+            cmds.connectAttr(local_curves[source]+'.output',plug,force=True)
+        result['localizedReferenceCurves']=len(local_curves)
         for plug in set(original_plugs)|set(static_plugs):
             started=True;cmds.cutKey(plug,clear=True)
         # A mobile-authored curve is a complete track. Retaining hidden old Maya keys

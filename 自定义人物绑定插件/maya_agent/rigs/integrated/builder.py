@@ -31,7 +31,8 @@ def preflight(parts):
         names=options['targets'];part=PARTS[key]
         if part['count'] and len(names)!=part['count']:
             raise ValueError('{}需要 {} 个有序目标。'.format(part['label'],part['count']))
-        copy=bool(options.get('copy_animation',False))
+        compatible=bool(options.get('compatible_inputs',False))
+        copy=bool(options.get('copy_animation',False)) or compatible
         if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',options.get('name',key)):
             raise ValueError(part['label']+'的部位名称无效。')
         if copy and not options.get('drive_targets',True):raise ValueError(part['label']+'拷贝动画需要启用驱动目标。')
@@ -46,10 +47,10 @@ def preflight(parts):
             for name in names:
                 if not copy and any(c.connectionInfo(name+'.'+a,sfd=True) for a in ('tx','ty','tz','rx','ry','rz')):
                     raise ValueError('手指已有动画或驱动；请明确启用拷贝动画。')
-                row,_=inspect([name],allow_animation=True,minimum_count=1,allow_parent_drivers=True)
+                row,_=inspect([name],allow_animation=True,minimum_count=1,allow_parent_drivers=True,compatible_inputs=compatible)
                 samples.extend(row)
         else:
-            samples,_=inspect(names,allow_animation=copy,minimum_count=1 if part['kind'] in ('shoulder','head') else 2,allow_parent_drivers=True)
+            samples,_=inspect(names,allow_animation=copy,minimum_count=1 if part['kind'] in ('shoulder','head') else 2,allow_parent_drivers=True,compatible_inputs=compatible)
         for sample in samples:
             if sample['node'] in seen:raise ValueError('同一目标不能载入多个部位：'+sample['node'])
             seen.add(sample['node'])
@@ -82,6 +83,8 @@ def capture(data,general_root=None):
                 poses=[]
                 for sample in item['samples']:
                     matrix=c.xform(sample['node'],q=True,ws=True,m=True)
+                    if not all(math.isfinite(v) for v in matrix):
+                        raise ValueError('采样帧 {} 的目标矩阵不是有限数值：{}'.format(frame,sample['node']))
                     tm=om.MTransformationMatrix(om.MMatrix(matrix));scale=tm.scale(om.MSpace.kWorld)
                     if min(scale)<=0 or max(scale)-min(scale)>1e-5 or max(abs(v) for v in tm.shear(om.MSpace.kWorld))>1e-5:
                         raise ValueError('动画存在非均匀/负缩放或剪切：'+sample['node'])
@@ -207,6 +210,9 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
     import maya.cmds as c
     from maya_agent.rigs.runtime_plugin import ensure_undo_command
     ensure_undo_command()
+    # inverseMatrix is supplied by Maya's matrixNodes plug-in, which need not
+    # be autoloaded in a fresh profile. Never create an unknown placeholder.
+    if not c.pluginInfo('matrixNodes',q=True,loaded=True):c.loadPlugin('matrixNodes',quiet=True)
     from maya_agent.rigs.custom_body.animation import Transfer
     from maya_agent.rigs.custom_body.targets import restore
     from maya_agent.rigs.soft_leg import cleanup
@@ -276,16 +282,29 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
         for key,item in data.items():
             if not item['options'].get('drive_targets',True):continue
             if item['frames']:
-                transfer=Transfer(SimpleNamespace(cmds=c,namespace=namespace,created=created),item['samples'],item['frames'])
+                transfer_class=Transfer
+                if item['options'].get('compatible_inputs',False):
+                    from .input_transfer import InputTransfer
+                    transfer_class=InputTransfer
+                transfer=transfer_class(SimpleNamespace(cmds=c,namespace=namespace,created=created),item['samples'],item['frames'])
                 transfers.append(transfer);transfer.detach()
         for key,item in data.items():
             if not item['options'].get('drive_targets',True):continue
             mappings=[]
+            from maya_agent.rigs.rotation_limits import disable as disable_limits,record as record_limits
+            disable_limits(item['samples'])
+            built[key]['original_rotation_limits']=record_limits(item['samples'])
             for index,(proxy,sample) in enumerate(zip(item['proxies'],item['samples'])):
                 constraint=c.parentConstraint(proxy,sample['node'],maintainOffset=False,
                     name=namespace+':'+key+'_target'+str(index+1))[0]
                 mappings.append(dict(target=sample['node'],driver=proxy,constraint=constraint))
             built[key]['original_target_mapping']=mappings
+        for transfer in transfers:
+            if hasattr(transfer,'restore_locks'):transfer.restore_locks()
+        if any(item['options'].get('compatible_inputs',False) for item in data.values()):
+            cycles=[p for p in (c.cycleCheck(all=True,list=True) or [])
+                    if any(ns+':' in p for ns in owned+[namespace])]
+            if cycles:raise ValueError('原驱动与新绑定形成循环，已取消接管：'+cycles[0])
         # Compare originals at every requested sampling frame and static build pose.
         error=0.0
         for f in sorted({frame}|{f for item in data.values() for f in item['frames']}):
@@ -303,6 +322,10 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
                     original_animation_backups=[t.backup for t in transfers],spaces=spaces,space_root=space_root,hierarchy=hierarchy)
         result['general_root']=general_root
         result['pose_tolerance']=pose_tolerance
+        result['compatible_inputs']={key:dict(backup=transfer.backup,
+                    start_frame=item['frames'][0],end_frame=item['frames'][-1])
+                    for key,item in data.items() if item['options'].get('compatible_inputs',False)
+                    for transfer in transfers if transfer.samples is item['samples']}
         result['external_follow']=dict(chest=chest_follow,hips=hips_follow)
         from .display import apply as organize_display
         result['display']=organize_display(result)
@@ -378,6 +401,8 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
         c.setAttr(root+'.integratedRigData',json.dumps(result,ensure_ascii=False),type='string',lock=True)
         return result
     except Exception:
+        for transfer in transfers:
+            if hasattr(transfer,'unlock'):transfer.unlock()
         # Master scaling also touches original OPM and skin matrix inputs. Restore
         # those before deleting the newly owned graph on a late assembly failure.
         from .master_scale import rollback as rollback_master_scale
@@ -391,6 +416,8 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
         if c.namespace(exists=namespace):cleanup(namespace)
         for t in transfers:t.rollback()
         for item in data.values():
+            from maya_agent.rigs.rotation_limits import restore as restore_limits
+            restore_limits(item['samples'])
             if not item['frames']:restore(item['samples'])
         raise
     finally:

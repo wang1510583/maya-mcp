@@ -14,8 +14,7 @@ __author__ = "Christian UNterberg, Tetsuo Animation Studio"
 __copyright__ = "Copyright 2024, Tetsuo Animation Studio"
 __credits__ = ["Christian Unterberg"]
 __license__ = "GNU Affero General Public License v3.0"
-__version__ = "0.0.10-keypose"
-# Local modification: rig-aware Euler conversion preserving authored key poses.
+__version__ = "0.0.12-native-filter"
 __maintainer__ = "Christian Unterbergt"
 __email__ = "chris@tetsuoanimation.com"
 __links__ = ["https://www.tetsuoanimation.com", "https://tetsuoanimation.gumroad.com/l/mayaspeedslider"]
@@ -63,25 +62,255 @@ _main_window = None
 # Euler Tool Functions
 # ============================================================================
 
-def gimbal_tolerance(obj):
-    """计算万向锁程度 (0-1)"""
-    rotate_order = ROTATE_ORDERS[cmds.getAttr(obj + '.rotateOrder')]
-    mid_value = cmds.getAttr(obj + '.r' + rotate_order[1])
-    return abs(((mid_value + 90) % 180) - 90) / 90
+# Rig-aware Euler backend (2026-11-04), bundled for standalone use.
+"""Euler operations in the solver's rotation space, including zero surfaces.
 
-def test_all_rotate_orders_at_frame(obj, dup):
-    """在当前帧测试所有旋转顺序的万向锁程度（与原版一致）"""
-    # 同步复制体的旋转值和旋转顺序
-    for axis in ['rx', 'ry', 'rz']:
-        cmds.setAttr(dup + '.' + axis, cmds.getAttr(obj + '.' + axis))
-    cmds.setAttr(dup + '.rotateOrder', cmds.getAttr(obj + '.rotateOrder'))
-    
-    tolerances = []
-    for roo in ROTATE_ORDERS:
-        # 使用preserve=True保持世界空间旋转，自动重算欧拉角
-        cmds.xform(dup, preserve=True, rotateOrder=roo)
-        tolerances.append(gimbal_tolerance(dup))
-    return tolerances
+No constraints or world-space feedback are introduced. Order conversion preserves
+poses at the union of existing XYZ rotation key times, without interval sampling.
+Between-key interpolation is left to Maya. Maya 2024, degree angle units.
+"""
+import json
+import math
+import maya.cmds as cmds
+import maya.api.OpenMaya as om
+
+ORDERS = ('xyz', 'yzx', 'zxy', 'xzy', 'yxz', 'zyx')
+ATTRS = ('rotateX', 'rotateY', 'rotateZ')
+
+
+def describe(node, editable=False):
+    names = cmds.ls(node, long=True) or []
+    if len(names) != 1 or cmds.nodeType(names[0]) not in ('transform', 'joint'):
+        raise ValueError('请选择唯一的控制器或变换节点：' + node)
+    node = names[0]
+    if cmds.currentUnit(q=True, angle=True) != 'deg':
+        raise ValueError('请先将 Maya 角度单位设为度。')
+    offsets = [0.0] * 3
+    source = node
+    if cmds.objExists(node + '.zeroChannelData'):
+        data = json.loads(cmds.getAttr(node + '.zeroChannelData'))
+        source = data['source']
+        for i, attr in enumerate(ATTRS):
+            if attr not in data['offsets']:
+                raise ValueError('此零位控制器没有完整的 XYZ 旋转通道：' + node)
+            offsets[i] = data['offsets'][attr]
+            edge = cmds.connectionInfo(source + '.' + attr, sfd=True)
+            blend = edge.rsplit('.', 1)[0]
+            if (not blend or cmds.nodeType(blend) != 'animBlendNodeAdditiveDA'
+                    or not cmds.isConnected(node + '.' + attr, blend + '.inputA')
+                    or cmds.connectionInfo(blend + '.inputB', sfd=True)
+                    or cmds.connectionInfo(blend + '.weightA', sfd=True)
+                    or cmds.connectionInfo(blend + '.weightB', sfd=True)
+                    or abs(cmds.getAttr(blend + '.inputB') - offsets[i]) > 1e-7
+                    or abs(cmds.getAttr(blend + '.weightA') - 1) > 1e-9
+                    or abs(cmds.getAttr(blend + '.weightB') - 1) > 1e-9):
+                raise ValueError('归零旋转连接已变化，未修改：' + node)
+        if not cmds.isConnected(node + '.rotateOrder', source + '.rotateOrder'):
+            raise ValueError('归零控制器与输入旋转顺序未连接：' + node)
+    curves = []
+    times = []
+    if editable and (cmds.getAttr(node + '.rotateOrder', lock=True)
+                     or cmds.connectionInfo(node + '.rotateOrder', sfd=True)):
+        raise ValueError('旋转顺序被锁定或驱动：' + node)
+    for attr in ATTRS:
+        plug = node + '.' + attr
+        edge = cmds.connectionInfo(plug, sfd=True)
+        curve = edge.rsplit('.', 1)[0] if edge else None
+        if editable:
+            if cmds.getAttr(plug, lock=True):
+                raise ValueError('旋转通道已锁定：' + plug)
+            if curve and cmds.nodeType(curve) != 'animCurveTA':
+                raise ValueError('暂不覆盖动画层、约束或表达式驱动：' + plug)
+            if curve:
+                if not cmds.keyframe(curve, q=True, kc=True):
+                    raise ValueError('旋转动画曲线为空：' + curve)
+                consumers = cmds.listConnections(curve + '.output', s=False, d=True, p=True) or []
+                if len(consumers) != 1 or cmds.lockNode(curve, q=True, lock=True)[0]:
+                    raise ValueError('动画曲线共享或锁定，未修改：' + curve)
+                # Time warps and cycle/linear infinity need their own conversion.
+                driver = cmds.connectionInfo(curve + '.input', sfd=True)
+                if driver and cmds.nodeType(driver.split('.')[0]) != 'time':
+                    raise ValueError('不支持重映射时间曲线：' + curve)
+        curves.append(curve)
+        times.append(sorted(set(cmds.keyframe(plug, q=True, tc=True) or [])))
+    return dict(node=node, source=source, offsets=offsets, curves=curves,
+                times=times, order=cmds.getAttr(node + '.rotateOrder'))
+
+
+def actual_values(info, frame):
+    return [cmds.getAttr(info['node'] + '.' + a, time=frame) + o
+            for a, o in zip(ATTRS, info['offsets'])]
+
+
+def euler(values, order):
+    return om.MEulerRotation(*[math.radians(v) for v in values], order)
+
+
+def rotation_error(a, ao, b, bo):
+    qa, qb = euler(a, ao).asQuaternion(), euler(b, bo).asQuaternion()
+    dot = abs(qa.x*qb.x + qa.y*qb.y + qa.z*qb.z + qa.w*qb.w)
+    return math.degrees(2 * math.acos(min(1.0, dot)))
+
+
+def tolerances(node, frame):
+    info = describe(node)
+    original = euler(actual_values(info, frame), info['order'])
+    result = []
+    for order, label in enumerate(ORDERS):
+        converted = om.MEulerRotation(original)
+        converted.reorderIt(order)
+        middle = math.degrees(converted['xyz'.index(label[1])])
+        result.append(abs(((middle + 90) % 180) - 90) / 90)
+    return result
+
+
+def _key_times(info):
+    times = sorted(set(t for axis in info['times'] for t in axis))
+    if not times:
+        return [cmds.currentTime(q=True)]
+    return times
+
+
+def _transaction(infos, operation):
+    """Keep curve identities, connections and full backup curves for rollback."""
+    if not cmds.undoInfo(q=True, state=True):
+        raise ValueError('请先启用 Maya 撤销，以便撤销旋转转换。')
+    saved = []
+    auto = cmds.autoKeyframe(q=True, state=True)
+    cmds.undoInfo(openChunk=True, chunkName='RigAwareEuler')
+    try:
+        cmds.autoKeyframe(state=False)
+        for info in infos:
+            row = dict(info=info, values=[cmds.getAttr(info['node']+'.'+a) for a in ATTRS], copies=[])
+            saved.append(row)
+            for curve in info['curves']:
+                row['copies'].append(cmds.duplicate(curve, name='__rigEulerBackup#')[0] if curve else None)
+        try:
+            return operation()
+        except Exception:
+            for row in saved:
+                info = row['info']
+                cmds.setAttr(info['node']+'.rotateOrder', info['order'])
+                for attr, curve, backup, value in zip(ATTRS, info['curves'], row['copies'], row['values']):
+                    plug = info['node']+'.'+attr
+                    if curve:
+                        cmds.copyKey(backup)
+                        cmds.pasteKey(curve, option='replaceCompletely')
+                    else:
+                        edge = cmds.connectionInfo(plug, sfd=True)
+                        if edge and cmds.nodeType(edge.split('.')[0]) == 'animCurveTA':
+                            cmds.delete(edge.split('.')[0])
+                        cmds.setAttr(plug, value)
+            raise
+    finally:
+        for row in saved:
+            for backup in row['copies']:
+                if backup and cmds.objExists(backup):
+                    cmds.delete(backup)
+        cmds.autoKeyframe(state=auto)
+        cmds.undoInfo(closeChunk=True)
+
+
+def filter_euler(objects=None):
+    """Filter full XYZ curves after adding offsets, then subtract offsets."""
+    objects = objects or cmds.ls(sl=True, long=True) or []
+    if not objects:
+        raise ValueError('请选择需要过滤的控制器。')
+    infos = [describe(n, editable=True) for n in dict.fromkeys(objects)]
+    for info in infos:
+        if not all(info['curves']) or not info['times'][0] or not all(t == info['times'][0] for t in info['times']):
+            raise ValueError('欧拉过滤要求 XYZ 三轴关键帧时间一致：' + info['node'])
+    def apply():
+        reports = []
+        for info in infos:
+            temp = None
+            copies = []
+            try:
+                temp = cmds.createNode('transform', name='__rigEulerFilter#', skipSelect=True)
+                cmds.setAttr(temp+'.rotateOrder', info['order'])
+                before = [actual_values(info, t) for t in info['times'][0]]
+                for attr, curve, offset in zip(ATTRS, info['curves'], info['offsets']):
+                    copy = cmds.duplicate(curve, name='__rigEulerCurve#')[0]
+                    copies.append(copy)
+                    cmds.connectAttr(copy+'.output', temp+'.'+attr)
+                    cmds.keyframe(copy, e=True, relative=True, valueChange=offset)
+                cmds.filterCurve(*copies, filter='euler')
+                values = [cmds.keyframe(k, q=True, vc=True) for k in copies]
+                error = max(rotation_error(old, info['order'], new, info['order'])
+                            for old, new in zip(before, zip(*values)))
+                if error > 1e-4:
+                    raise RuntimeError('过滤姿态校验失败：' + info['node'])
+                for curve, offset, axis_values in zip(info['curves'], info['offsets'], values):
+                    for i, value in enumerate(axis_values):
+                        cmds.keyframe(curve, e=True, index=(i, i), valueChange=value-offset)
+                reports.append(dict(node=info['node'], keys=len(before), max_error_degrees=error))
+            finally:
+                for n in copies + ([temp] if temp else []):
+                    if cmds.objExists(n):
+                        cmds.delete(n)
+        return reports
+    return _transaction(infos, apply)
+
+
+def switch_order(objects, order):
+    """Convert at existing rotation key times only; keep existing tangent types."""
+    if order not in ORDERS:
+        raise ValueError('无效的旋转顺序。')
+    if not objects:
+        raise ValueError('请选择物体。')
+    target = ORDERS.index(order)
+    infos = [describe(n, editable=True) for n in dict.fromkeys(objects)]
+    infos = [info for info in infos if info['order'] != target]
+    for info in infos:
+        for curve in info['curves']:
+            if curve and (cmds.getAttr(curve+'.preInfinity') or cmds.getAttr(curve+'.postInfinity')):
+                raise ValueError('转换前请将循环/线性无限动画烘焙为关键帧：' + curve)
+        times = _key_times(info)
+        values = [actual_values(info, t) for t in times]
+        converted = []
+        previous = None
+        for value in values:
+            current = euler(value, info['order'])
+            current.reorderIt(target)
+            if previous is not None:
+                current = current.closestSolution(previous)
+                current = current.closestCut(previous)
+            previous = current
+            converted.append([math.degrees(v)-o for v, o in zip(current, info['offsets'])])
+        info.update(samples=times, before=values, converted=converted)
+    if not infos:
+        return []
+    def apply():
+        reports = []
+        for info in infos:
+            node = info['node']
+            cmds.setAttr(node+'.rotateOrder', target)
+            animated = any(info['times'])
+            if animated:
+                for t, values in zip(info['samples'], info['converted']):
+                    for attr, value, old_times in zip(ATTRS, values, info['times']):
+                        if t in old_times:
+                            cmds.keyframe(node+'.'+attr, e=True, time=(t,t), valueChange=value)
+                        else:
+                            # Euler axes are coupled. Complete XYZ at existing
+                            # rotation times only; never add in-between frames.
+                            cmds.setKeyframe(node, at=attr, time=t, value=value,
+                                             itt='auto', ott='auto')
+                for attr in ATTRS:
+                    if cmds.keyframe(node+'.'+attr, q=True, tc=True) != info['samples']:
+                        raise RuntimeError('关键帧时间校验失败，已恢复：'+node)
+            else:
+                for attr, value in zip(ATTRS, info['converted'][0]):
+                    cmds.setAttr(node+'.'+attr, value)
+            error = max(rotation_error(before, info['order'], actual_values(info, t), target)
+                        for t, before in zip(info['samples'], info['before']))
+            if error > 1e-4:
+                raise RuntimeError('转换姿态校验失败，已恢复：' + node)
+            reports.append(dict(node=node, order=order, keys=len(info['samples']) if animated else 0,
+                                max_error_degrees=error, mode='existing_keys'))
+        return reports
+    return _transaction(infos, apply)
+
 
 def get_time_slider_range():
     """Return the highlighted Maya time slider range, or None when there is no range."""
@@ -123,287 +352,93 @@ def get_euler_keyframes(obj):
 
     return keyframes
 
-def _euler_context(obj):
-    import json
-    nodes = cmds.ls(obj, long=True) or []
-    if len(nodes) != 1 or cmds.nodeType(nodes[0]) not in ('transform', 'joint'):
-        raise ValueError('请选择唯一的控制器或变换物体：' + obj)
-    obj = nodes[0]
-    source, root, offsets = obj, None, [0.0] * 3
-    zero_text, offset_plugs = None, []
-    if cmds.objExists(obj + '.zeroChannelData'):
-        zero_text = cmds.getAttr(obj + '.zeroChannelData')
-        data = json.loads(zero_text)
-        # Validate the actual additive graph rather than limiting body parts.
-        if not all('rotate'+a in data.get('offsets', {}) for a in 'XYZ'):
-            raise ValueError('此控制器未开放三轴旋转（例如膝盖方向或参数控制器）：' + obj)
-        source, root = data['source'], data['root']
-        if not cmds.isConnected(obj+'.rotateOrder', source+'.rotateOrder'):
-            raise ValueError('此节点不是当前绑定的旋转输入控制器：' + obj)
-        offsets = [data['offsets'].get('rotate' + a, 0.0) for a in 'XYZ']
-        # Read the actual angle inputs, rather than assuming stored units.
-        for i, axis in enumerate('XYZ'):
-            edge = data['edges'].get('rotate' + axis)
-            if not edge or not cmds.isConnected(edge, source + '.rotate' + axis):
-                raise ValueError('零位旋转连接已改变：' + obj)
-            add = edge.rsplit('.', 1)[0]
-            if (cmds.nodeType(add) != 'animBlendNodeAdditiveDA'
-                    or cmds.getAttr(add + '.weightA') != 1
-                    or cmds.getAttr(add + '.weightB') != 1
-                    or not cmds.isConnected(obj + '.rotate' + axis, add + '.inputA')):
-                raise ValueError('零位旋转偏移结构不匹配：' + obj)
-            offsets[i] = cmds.getAttr(add + '.inputB')
-            offset_plugs.append(add + '.inputB')
-    if cmds.objExists(source + '.liveInput'):
-        links = cmds.listConnections(source + '.liveInput', s=True, d=False) or []
-        if len(links) != 1:
-            raise ValueError('找不到实际旋转输入：' + obj)
-        source = links[0]
-    if not cmds.objExists(source):
-        raise ValueError('绑定输入不存在：' + source)
-    if cmds.objExists(source + '.liveRotationData'):
-        raise ValueError('请先结束旋转操作或升级旧旋转层：' + obj)
-    watched = [source]
-    if root and cmds.objExists(root + '.liveAlignmentData'):
-        live = json.loads(cmds.getAttr(root + '.liveAlignmentData'))
-        watched.extend(live['targets'].values())
-        # Result joints are authoritative. Internal IK end markers can have
-        # different unused orientations after an equivalent FK Euler rewrite.
-        if cmds.objExists(root + '.armTargets'):
-            watched.extend(json.loads(cmds.getAttr(root + '.armTargets')))
-    if root:
-        ancestor = root
-        while ancestor:
-            if cmds.objExists(ancestor + '.integratedRigData'):
-                rig = json.loads(cmds.getAttr(ancestor + '.integratedRigData'))
-                for part in rig['parts'].values():
-                    # Chest/hips/neck can move downstream parts: validate the
-                    # complete character output, not just the selected part.
-                    watched.extend(part.get('joints', []))
-                    watched.extend(m['target'] for m in part.get('target_mapping', []))
-                    watched.extend(m['target'] for m in part.get('original_target_mapping', []))
-                break
-            ancestor = (cmds.listRelatives(ancestor, p=True, f=True) or [None])[0]
-    return dict(obj=obj, source=source, root=root, offsets=offsets,
-                zero_text=zero_text, offset_plugs=offset_plugs,
-                watched=sorted(set(cmds.ls(watched, long=True) or [])))
-
-
-def _euler_angles(context):
-    import maya.api.OpenMaya as om
-    unit = om.MAngle.uiUnit()
-    source = context['source']
-    return om.MEulerRotation(*[om.MAngle(v, unit).asRadians()
-                              for v in cmds.getAttr(source + '.rotate')[0]],
-                            cmds.getAttr(source + '.rotateOrder'))
-
-
-def _euler_reorder(rotation, order, previous=None):
-    """Keep matrix equivalence even at singularities / distant Euler branches."""
-    import math
-    import maya.api.OpenMaya as om
-    result = rotation.reorder(order)
-    if previous is not None:
-        candidate = result.closestSolution(previous)
-        error = max(abs(a-b) for a, b in zip(rotation.asMatrix(), candidate.asMatrix()))
-        if error < 1e-10:
-            result = candidate
-        else:
-            result = om.MEulerRotation(*[v + round((p-v)/(2*math.pi))*2*math.pi
-                                        for v, p in zip(result, previous)], order)
-    # q and -q have the same rigid transform, but the spine's continuous
-    # weighted-quaternion graph uses the authored lift/sign. Preserve it too.
-    if sum(a*b for a,b in zip(rotation.asQuaternion(),result.asQuaternion())) < 0:
-        reference = list(previous) if previous is not None else list(result)
-        candidates = []
-        for axis in range(3):
-            for turn in (-2*math.pi, 2*math.pi):
-                values = list(result)
-                values[axis] += turn
-                candidates.append(values)
-        values = min(candidates, key=lambda values:sum((a-b)**2 for a,b in zip(values,reference)))
-        result = om.MEulerRotation(*values,order)
-    return result
-
-
 def calculate_euler_for_object(obj):
-    """Analyze actual rotations; do not duplicate a result-following control."""
-    context = _euler_context(obj)
-    old_time = cmds.currentTime(q=True)
-    current = ROTATE_ORDERS[cmds.getAttr(context['obj'] + '.rotateOrder')]
-    times = get_euler_keyframes(context['obj']) or [old_time]
-    totals = [0.0] * 6
-    def tolerances():
-        import math
-        rotation = _euler_angles(context)
-        return [abs(((math.degrees(list(rotation.reorder(i))['xyz'.index(order[1])])
-                       + 90) % 180) - 90) / 90 for i, order in enumerate(ROTATE_ORDERS)]
-    try:
-        for frame in times:
-            cmds.currentTime(frame)
-            totals = [a+b for a, b in zip(totals, tolerances())]
-        cmds.currentTime(old_time)
-        current_values = tolerances()
-    finally:
-        cmds.currentTime(old_time)
-    averages = [v / len(times) for v in totals]
-    best = ROTATE_ORDERS[averages.index(min(averages))]
-    lines = ['分析了 %d 个关键帧（实际旋转输入）' % len(times)]
-    for avg, cur, order in zip(averages, current_values, ROTATE_ORDERS):
-        lines.append('%s: 平均%d%% 当前帧%d%%%s' %
-                     (order, avg*100, cur*100, ' [推荐]' if order == best else ''))
-    lines.append('\n综合推荐: ' + best)
-    return current, best, '\n'.join(lines)
-
-
-def _euler_validate(expected, tolerance=1e-5):
-    maximum = 0.0
-    for frame, poses in expected.items():
-        cmds.currentTime(frame)
-        for node, matrix in poses.items():
-            actual = cmds.xform(node, q=True, ws=True, matrix=True)
-            error = max(abs(a-b) for a, b in zip(matrix, actual))
-            maximum = max(maximum, error)
-            if error > tolerance:
-                raise RuntimeError('关键帧姿态核对失败：%s，帧 %g，矩阵误差 %.8g' %
-                                   (node, frame, error))
-    return maximum
+    """Analyse the actual FK rotation, including this rig's zero offsets."""
+    info = describe(obj)
+    current_ro = ORDERS[info['order']]
+    now = cmds.currentTime(q=True)
+    frames = get_euler_keyframes(obj) or [now]
+    samples = [tolerances(obj, frame) for frame in frames]
+    averages = [sum(row[i] for row in samples)/len(samples) for i in range(6)]
+    current = tolerances(obj, now)
+    best = ORDERS[averages.index(min(averages))]
+    lines = ['分析了 %d 个采样帧（内部实际旋转）' % len(frames)]
+    for label, avg, cur in zip(ORDERS, averages, current):
+        lines.append('%s: 平均%d%% 当前帧%d%%%s' % (label, int(avg*100), int(cur*100), ' [推荐]' if label == best else ''))
+    lines.append('综合推荐: '+best)
+    return current_ro, best, '\n'.join(lines)
 
 
 def switch_euler_order(objects, rot_order):
-    """Preserve authored key poses without constraining result-following handles.
-
-    Rotation order is global, so convert ALL authored times (including fractional
-    keys), not just a highlighted range. Interpolation between keys may change.
-    Old curves remain untouched until validation passes. One undo restores them.
-    """
-    import json
-    import maya.api.OpenMaya as om
-    if not objects:
-        cmds.warning('请选择物体')
-        return False
-    order = ROTATE_ORDERS.index(rot_order)
-    contexts = [_euler_context(obj) for obj in dict.fromkeys(objects)]
-    key_objects = [ctx['obj'] for ctx in contexts]
-    contexts = [ctx for ctx in contexts if cmds.getAttr(ctx['obj']+'.rotateOrder') != order]
-    if not contexts:
-        return dict(changed=0, max_error=0.0)
-    if not cmds.undoInfo(q=True, state=True):
-        raise ValueError('请先开启 Maya 撤销，再转换欧拉顺序。')
-    for ctx in contexts:
-        obj = ctx['obj']
-        if cmds.referenceQuery(obj, isNodeReferenced=True):
-            raise ValueError('请在绑定源文件中转换，当前控制器来自引用：' + obj)
-        order_plug = obj + '.rotateOrder'
-        if cmds.getAttr(order_plug, lock=True) or cmds.connectionInfo(order_plug, sfd=True):
-            raise ValueError('旋转顺序已锁定或受驱动：' + obj)
-        ctx['old_order'] = cmds.getAttr(order_plug)
-        rest = _euler_reorder(om.MEulerRotation(*[om.MAngle(v, om.MAngle.uiUnit()).asRadians()
-                                   for v in ctx['offsets']], ctx['old_order']), order)
-        ctx['new_offsets'] = [om.MAngle(v).asUnits(om.MAngle.uiUnit()) for v in rest]
-        for plug in ctx['offset_plugs']:
-            if cmds.getAttr(plug, lock=True) or cmds.connectionInfo(plug, sfd=True):
-                raise ValueError('零位偏移已锁定或受驱动：' + plug)
-        ctx['channels'] = []
-        for axis in 'XYZ':
-            plug = obj + '.rotate' + axis
-            incoming = cmds.connectionInfo(plug, sfd=True)
-            if cmds.getAttr(plug, lock=True) or (incoming and
-                    cmds.nodeType(incoming.rsplit('.', 1)[0]) != 'animCurveTA'):
-                raise ValueError('旋转通道锁定、约束或存在动画层，未作修改：' + plug)
-            ctx['channels'].append(dict(plug=plug, incoming=incoming,
-                                        value=cmds.getAttr(plug), copy=None))
-    old_time = cmds.currentTime(q=True)
-    selection = cmds.ls(sl=True, long=True) or []
-    auto = cmds.autoKeyframe(q=True, state=True)
-    modified = cmds.file(q=True, modified=True)
-    times = sorted(set(cmds.keyframe(key_objects, q=True, tc=True) or []))
-    animated = bool(times)
-    times = times or [old_time]
-    watched = sorted({n for ctx in contexts for n in ctx['watched']})
-    expected, replacements = {}, []
-    committed = False
-    cmds.undoInfo(openChunk=True, chunkName='EulerOrderPreserveKeyPoses')
+    """Convert the entire rotation animation, not only a highlighted range."""
     try:
-        cmds.autoKeyframe(state=False)
-        for ctx in contexts:
-            ctx['converted'] = []
-        # Capture every object before touching any parent or child curve.
-        for frame in times:
-            cmds.currentTime(frame)
-            expected[frame] = {n: cmds.xform(n, q=True, ws=True, matrix=True) for n in watched}
-            for ctx in contexts:
-                previous = ctx.get('previous')
-                rotation = _euler_reorder(_euler_angles(ctx), order, previous)
-                ctx['previous'] = rotation
-                ctx['converted'].append([om.MAngle(v).asUnits(om.MAngle.uiUnit())-offset
-                                         for v, offset in zip(rotation, ctx['new_offsets'])])
-        for ctx in contexts:
-            cmds.setAttr(ctx['obj']+'.rotateOrder', order)
-            if ctx['zero_text']:
-                data = json.loads(ctx['zero_text'])
-                for axis, plug, value in zip('XYZ', ctx['offset_plugs'], ctx['new_offsets']):
-                    cmds.setAttr(plug, value)
-                    data['offsets']['rotate'+axis] = value
-                plug = ctx['obj']+'.zeroChannelData'
-                cmds.setAttr(plug, lock=False)
-                cmds.setAttr(plug, json.dumps(data), type='string', lock=True)
-            for i, channel in enumerate(ctx['channels']):
-                plug, incoming = channel['plug'], channel['incoming']
-                if animated:
-                    if incoming:
-                        curve = cmds.duplicate(incoming.rsplit('.', 1)[0],
-                                               inputConnections=True, name='eulerConverted#')[0]
-                    else:
-                        curve = cmds.createNode('animCurveTA', name='eulerConverted#', skipSelect=True)
-                        cmds.connectAttr((cmds.ls(type='time') or ['time1'])[0]+'.outTime', curve+'.input')
-                    channel['copy'] = curve
-                    replacements.append(curve)
-                    cmds.connectAttr(curve+'.output', plug, force=True)
-                    for frame, angles in zip(times, ctx['converted']):
-                        cmds.setKeyframe(curve, t=frame, v=angles[i])
-                else:
-                    cmds.setAttr(plug, ctx['converted'][0][i])
-        maximum = _euler_validate(expected)
-        # Keep shared curves; delete only originals no longer driving anything.
-        originals = {ch['incoming'].rsplit('.', 1)[0] for ctx in contexts
-                     for ch in ctx['channels'] if ch['incoming']}
-        for curve in originals:
-            if not cmds.listConnections(curve, s=False, d=True):
-                cmds.delete(curve)
-        committed = True
-        return dict(changed=len(contexts), key_times=times, max_error=maximum)
-    except Exception:
-        # Originals have not been edited. Restore edges / constants explicitly;
-        # do not undo an outer caller's transaction or the user's previous edit.
-        for ctx in contexts:
-            cmds.setAttr(ctx['obj']+'.rotateOrder', ctx['old_order'])
-            if ctx['zero_text']:
-                for plug, value in zip(ctx['offset_plugs'], ctx['offsets']):
-                    cmds.setAttr(plug, value)
-                plug = ctx['obj']+'.zeroChannelData'
-                cmds.setAttr(plug, lock=False)
-                cmds.setAttr(plug, ctx['zero_text'], type='string', lock=True)
-            for ch in ctx['channels']:
-                if ch['incoming']:
-                    cmds.connectAttr(ch['incoming'], ch['plug'], force=True)
-                else:
-                    edge = cmds.connectionInfo(ch['plug'], sfd=True)
-                    if edge:
-                        cmds.disconnectAttr(edge, ch['plug'])
-                    cmds.setAttr(ch['plug'], ch['value'])
-        for curve in replacements:
-            if cmds.objExists(curve):
-                cmds.delete(curve)
-        raise
-    finally:
-        cmds.currentTime(old_time)
-        cmds.select(selection, r=True) if selection else cmds.select(clear=True)
-        cmds.autoKeyframe(state=auto)
-        if not committed:
-            cmds.file(modified=modified)
-        cmds.undoInfo(closeChunk=True)
+        reports = switch_order(objects, rot_order)
+        cmds.inViewMessage(amg='旋转顺序已转换：保留原关键帧时间与姿态，不补中间帧；Ctrl+Z 撤销。', pos='midCenter', fade=True)
+        return True
+    except Exception as exc:
+        cmds.warning(str(exc))
+        return False
 
+
+def native_euler_filter_selected(selection_connection=None):
+    """Use the same selection connection and MEL procedure as Maya's menu."""
+    import json
+    temporary = None
+    opened = False
+    try:
+        # QPushButton.clicked supplies a bool, not a selection connection.
+        connection = selection_connection if isinstance(selection_connection, str) else None
+        if not connection:
+            panels = [p for p in cmds.getPanel(type='scriptedPanel') or []
+                      if cmds.scriptedPanel(p,q=True,type=True)=='graphEditor']
+            visible = cmds.getPanel(visiblePanels=True) or []
+            focus = cmds.getPanel(withFocus=True)
+            panels.sort(key=lambda p: (p!=focus, p not in visible, p!='graphEditor1', p))
+            for panel in panels:
+                outline = panel+'OutlineEd'
+                if cmds.editor(outline,exists=True):
+                    candidate = cmds.editor(outline,q=True,selectionConnection=True)
+                    if candidate and mel.eval('findAnimCurves('+json.dumps(candidate)+')'):
+                        connection = candidate
+                        break
+        if not connection:
+            # Also usable without an open Graph Editor. Let Maya resolve
+            # selected curves/objects, including custom rotation attributes.
+            objects = cmds.keyframe(q=True,sl=True,name=True) or cmds.ls(sl=True,long=True) or []
+            if not objects:
+                cmds.warning('请选择图表编辑器中的曲线或场景控制器。')
+                return None
+            temporary = cmds.selectionConnection()
+            for obj in objects:
+                cmds.selectionConnection(temporary,e=True,select=obj)
+            connection = temporary
+        curves = mel.eval('findAnimCurves('+json.dumps(connection)+')') or []
+        if not curves:
+            cmds.warning('当前选择中没有可过滤的动画曲线。')
+            return None
+        cmds.undoInfo(openChunk=True, chunkName='NativeEulerFilter')
+        opened = True
+        mel.eval('performEulerFilter('+json.dumps(connection)+')')
+        cmds.inViewMessage(amg='普通欧拉过滤完成；Ctrl+Z 撤销。', pos='midCenter', fade=True)
+        return curves
+    except Exception as exc:
+        cmds.warning(str(exc))
+        return None
+    finally:
+        if opened:
+            cmds.undoInfo(closeChunk=True)
+        if temporary:
+            cmds.deleteUI(temporary)
+
+
+def safe_euler_filter_selected():
+    try:
+        reports = filter_euler()
+        cmds.inViewMessage(amg='安全欧拉过滤完成：关键帧姿态已核对，请检查帧间运动。', pos='midCenter', fade=True)
+        return reports
+    except Exception as exc:
+        cmds.warning(str(exc))
+        return None
 
 
 # ============================================================================
@@ -1120,22 +1155,16 @@ class TempoSlider(QtWidgets.QWidget):
             return
         
         # 如果还没计算过推荐欧拉，先计算
-        if self.best_euler == '---':
+        # Always recompute for the current selection.
+        if sel:
             if len(sel) == 1:
-                try:
-                    _, self.best_euler, _ = calculate_euler_for_object(sel[0])
-                except Exception as exc:
-                    cmds.warning("欧拉分析未完成：" + str(exc))
-                    return
+                _, self.best_euler, _ = calculate_euler_for_object(sel[0])
             else:
                 cmds.warning('请先左键点击计算推荐欧拉')
                 return
         
         # 转换到推荐欧拉
-        try:
-            switch_euler_order(sel, self.best_euler)
-        except Exception as exc:
-            cmds.warning("欧拉转换未完成：" + str(exc))
+        if not switch_euler_order(sel, self.best_euler):
             return
         
         # 更新显示
@@ -1153,11 +1182,7 @@ class TempoSlider(QtWidgets.QWidget):
             return
         
         obj = sel[0]
-        try:
-            current_ro, best_ro, _ = calculate_euler_for_object(obj)
-        except Exception as exc:
-            cmds.warning("欧拉分析未完成：" + str(exc))
-            return
+        current_ro, best_ro, _ = calculate_euler_for_object(obj)
         
         self.current_euler = current_ro
         self.best_euler = best_ro
@@ -1387,7 +1412,7 @@ class EulerToolWindow(QtWidgets.QWidget):
         
         self.setWindowFlags(QtCore.Qt.Tool | QtCore.Qt.FramelessWindowHint)
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground, False)
-        self.setFixedSize(220, 320)
+        self.setFixedSize(240, 358)
         self.setStyleSheet(self.STYLE)
         
         self.create_ui()
@@ -1455,7 +1480,6 @@ class EulerToolWindow(QtWidgets.QWidget):
         
         self.switch_btn = QtWidgets.QPushButton('转换')
         self.switch_btn.setObjectName('switch_btn')
-        self.switch_btn.setToolTip("保留全部原关键帧姿态（含小数帧）；帧间插值可能变化。支持一次撤销。")
         self.switch_btn.setFixedHeight(24)
         
         bottom_layout.addWidget(self.rot_order_combo)
@@ -1465,6 +1489,20 @@ class EulerToolWindow(QtWidgets.QWidget):
         main_layout.addWidget(display_group)
         main_layout.addWidget(result_group)
         main_layout.addLayout(bottom_layout)
+        self.switch_btn.setToolTip('只转换现有旋转关键帧，保持关键帧姿态，不补中间帧；保留原切线类型，由 Maya 自动插值。XYZ 时间不一致时仅在已有关键帧时间补齐三轴。')
+        filter_row = QtWidgets.QHBoxLayout()
+        filter_row.setSpacing(6)
+        self.native_filter_btn = QtWidgets.QPushButton('普通欧拉过滤')
+        self.native_filter_btn.setToolTip('直接调用 Maya 原生欧拉过滤菜单流程，使用图表编辑器所选曲线；没有图表曲线选择时处理所选对象。不补偿归零偏移。')
+        self.native_filter_btn.setFixedHeight(26)
+        self.native_filter_btn.clicked.connect(native_euler_filter_selected)
+        self.filter_btn = QtWidgets.QPushButton('安全欧拉过滤')
+        self.filter_btn.setFixedHeight(26)
+        self.filter_btn.setToolTip('适配归零偏移。过滤全部 XYZ 曲线；保留关键帧姿态，帧间插值会改变。不要对该绑定直接使用原生欧拉过滤。')
+        self.filter_btn.clicked.connect(safe_euler_filter_selected)
+        filter_row.addWidget(self.native_filter_btn)
+        filter_row.addWidget(self.filter_btn)
+        main_layout.addLayout(filter_row)
         
     def create_connections(self):
         self.calc_btn.clicked.connect(self.calculate_euler)
@@ -1478,11 +1516,7 @@ class EulerToolWindow(QtWidgets.QWidget):
             return
         
         obj = sel[0]
-        try:
-            current_ro, best_ro, results = calculate_euler_for_object(obj)
-        except Exception as exc:
-            cmds.warning("欧拉分析未完成：" + str(exc))
-            return
+        current_ro, best_ro, results = calculate_euler_for_object(obj)
         
         # 更新显示
         self.current_euler_label.setText(current_ro)
@@ -1514,10 +1548,7 @@ class EulerToolWindow(QtWidgets.QWidget):
             return
         
         rot_order = self.rot_order_combo.currentText()
-        try:
-            switch_euler_order(sel, rot_order)
-        except Exception as exc:
-            cmds.warning("欧拉转换未完成：" + str(exc))
+        if not switch_euler_order(sel, rot_order):
             return
         
         # 更新显示
@@ -1826,9 +1857,27 @@ def start():
     _main_window = TempoSlider()
     _main_window.show()
 
-def onMayaDroppedPythonFile(*_):
+def onMayaDroppedPythonFile(*args):
+    """Drag into Maya to install a persistent launcher and open this tool."""
+    from pathlib import Path
+    path = str(Path(__file__).resolve())
+    top = mel.eval('$tmp=$gShelfTopLevel')
+    shelf = 'RigEulerTools'
+    if not cmds.shelfLayout(shelf, exists=True):
+        cmds.shelfLayout(shelf, parent=top)
+    buttons = [b for b in cmds.shelfLayout(shelf,q=True,childArray=True) or []
+               if cmds.objectTypeUI(b)=='shelfButton' and cmds.shelfButton(b,q=True,label=True)=='速度轨迹欧拉']
+    options = dict(label='速度轨迹欧拉', image='timeplay.png', imageOverlayLabel='欧拉修复',
+                   annotation='播放速度 / 运动轨迹 / 绑定兼容欧拉工具', sourceType='python',
+                   command='import runpy\nrunpy.run_path(%r, run_name="__main__")' % path)
+    if buttons:
+        cmds.shelfButton(buttons[0],e=True,**options)
+    else:
+        cmds.shelfButton(parent=shelf,**options)
+    cmds.saveShelf(shelf, str(Path(cmds.internalVar(userShelfDir=True))/('shelf_'+shelf)).replace('\\','/'))
+    cmds.shelfTabLayout(top,e=True,selectTab=shelf)
     start()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     start()

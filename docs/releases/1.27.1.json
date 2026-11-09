@@ -1,0 +1,88 @@
+{
+  "core_version": "1.27.1",
+  "controller_shapes_version": "1.0.4",
+  "euler_tool_version": "0.0.12-native-filter",
+  "maya_validation_date": "2026-11-06",
+  "maya_version": "2024.2",
+  "creation": [
+    {
+      "passed": true,
+      "animated": false,
+      "max_build_error": 3.552713678800501e-15,
+      "sweep_poses": 108,
+      "max_sweep_error": 1.0658141036401503e-14,
+      "shoulders": true
+    },
+    {
+      "passed": true,
+      "animated": true,
+      "max_build_error": 3.552713678800501e-15,
+      "sweep_poses": 0,
+      "max_sweep_error": 0.0,
+      "shoulders": true
+    },
+    {
+      "passed": true,
+      "late_failure_restored": true,
+      "animated": false
+    },
+    {
+      "passed": true,
+      "undriven_limits_unchanged": true
+    }
+  ],
+  "reversed_shoulders": {
+    "passed": true,
+    "animated": false,
+    "max_build_error": 7.105427357601002e-15,
+    "sweep_poses": 108,
+    "max_sweep_error": 7.105427357601002e-15,
+    "shoulders": true,
+    "reverse_shoulders": true
+  },
+  "animated_failure": {
+    "passed": true,
+    "late_failure_restored": true,
+    "animated": true
+  },
+  "undo_redo": {
+    "passed": true,
+    "undo_restored_limits": true,
+    "redo_disabled_limits": true,
+    "max_matrix_error": 3.552713678800501e-15
+  },
+  "standalone": [
+    {
+      "part": "arm_L",
+      "passed": true,
+      "world_ik": false
+    },
+    {
+      "part": "arm_R",
+      "passed": true,
+      "world_ik": false
+    },
+    {
+      "part": "leg_L",
+      "passed": true,
+      "world_ik": null
+    },
+    {
+      "part": "leg_R",
+      "passed": true,
+      "world_ik": null
+    }
+  ],
+  "total_rotation_sweep_poses": 216,
+  "limitations": [
+    "Manual viewport dragging remains user acceptance.",
+    "Standalone arm world-IK setup can still fail on orphan proxy attributes in an unrelated old rig; standalone arm limit tests used world_ik=False.",
+    "Existing rig scenes require an explicit repair; new creation does not silently migrate scenes."
+  ],
+  "publish_validation_date": "2026-11-09",
+  "offline_tests": {
+    "passed": 127,
+    "duration_seconds": 8.09
+  },
+  "mobile_io_version": "1.6.0"
+}

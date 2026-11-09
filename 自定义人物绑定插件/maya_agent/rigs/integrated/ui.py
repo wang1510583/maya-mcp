@@ -9,6 +9,7 @@ _root_state=globals().get('_root_state',dict(uuid=None,name=None))
 _follow_state=globals().get('_follow_state',{key:dict(uuid=None,name=None) for key in ('chest','hips')})
 _global_options=globals().get('_global_options',dict(copy_animation=True,live_alignment=True))
 _global_options.setdefault('pose_tolerance',1e-4)
+_global_options.setdefault('compatible_inputs',True)
 _generic_state=globals().get('_generic_state',{'object':None,'parent':None})
 FOLLOW_LABELS={'chest':'胸部跟随对象','hips':'腰部跟随对象'}
 _state=globals().get('_state',{key:dict(targets=[],uuids=[],connected=False,name=key,drive_targets=True,
@@ -28,6 +29,7 @@ SPACE_OPTIONS={'head':[('space_head','头部多空间 → 胸部')],
 # Keep later explicit unchecks when the module is reloaded.
 for _key,_row in _state.items():
     _row['copy_animation']=_global_options['copy_animation']
+    _row['compatible_inputs']=_global_options['compatible_inputs']
     if PARTS[_key]['kind'] in ('arm','leg'):_row['live_alignment']=_global_options['live_alignment']
     for _option,_label in SPACE_OPTIONS.get(_key,SPACE_OPTIONS.get(PARTS[_key]['kind'],[])):
         _row.setdefault(_option,True)
@@ -161,6 +163,14 @@ class IntegratedWindow(QtWidgets.QDialog):
             from maya_agent.rigs.external_constraints_ui import show
             return show()
         external_button.clicked.connect(lambda:self.safe(open_external));layout.addWidget(external_button)
+        euler_button=QtWidgets.QPushButton('安全欧拉过滤（所选控制器）',self)
+        euler_button.setToolTip('适配本绑定的归零旋转偏移；过滤所选控制器全部 XYZ 旋转曲线。保留关键帧姿态，帧间插值会改变；Ctrl+Z 撤销。')
+        def filter_rotation():
+            from maya_agent.rigs.euler_tools import filter_euler
+            result=filter_euler()
+            self.message('已安全过滤 '+str(len(result))+' 个控制器；请检查帧间运动。Ctrl+Z 可撤销。')
+            return result
+        euler_button.clicked.connect(lambda:self.safe(filter_rotation));layout.addWidget(euler_button)
         bip_button=QtWidgets.QPushButton('导入 Max BIP 动画…',self)
         def open_bip():
             from maya_agent.rigs.bip_retarget_ui import show_ui
@@ -189,6 +199,7 @@ class IntegratedWindow(QtWidgets.QDialog):
         options_row=QtWidgets.QHBoxLayout();self.global_checkboxes={}
         for option,label,tip in (
                 ('copy_animation','拷贝动画至控制器','统一应用到所有已载入部位；动画范围和采样间隔在各部位右键设置。'),
+                ('compatible_inputs','兼容已有驱动','自动按部位设置的范围采样动画，备份并接管目标的位移旋转输入；保留父级和缩放连接，核对失败自动恢复。此模式即使关闭拷贝动画也会采样。'),
                 ('live_alignment','实时对齐','统一应用到已载入的左右手臂和腿部，拖动及播放时贴合骨骼。')):
             checkbox=QtWidgets.QCheckBox(label,self);checkbox.setChecked(_global_options[option])
             checkbox.setToolTip(tip)
@@ -211,7 +222,7 @@ class IntegratedWindow(QtWidgets.QDialog):
     def set_global_option(self,option,value):
         _global_options[option]=bool(value)
         for key,row in _state.items():
-            if option=='copy_animation' or PARTS[key]['kind'] in ('arm','leg'):row[option]=bool(value)
+            if option in ('copy_animation','compatible_inputs') or PARTS[key]['kind'] in ('arm','leg'):row[option]=bool(value)
         # Details can remain open while the main panel switch changes.
         for window in self.details_windows.values():
             self.sync_global_details(window)
@@ -379,6 +390,7 @@ class IntegratedWindow(QtWidgets.QDialog):
         config={k:dict(row,targets=targets(k)) for k,row in _state.items() if row['uuids']}
         for key,row in config.items():
             row['copy_animation']=_global_options['copy_animation']
+            row['compatible_inputs']=_global_options['compatible_inputs']
             if PARTS[key]['kind'] in ('arm','leg'):row['live_alignment']=_global_options['live_alignment']
         hands={k:v for k,v in config.items() if k in ('hand_L','hand_R')}
         if hands:

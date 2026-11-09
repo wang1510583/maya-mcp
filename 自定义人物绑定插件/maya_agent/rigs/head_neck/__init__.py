@@ -1,8 +1,27 @@
 """Reference-style head and neck: independent head, blended neck orientation."""
 import math
 
-VERSION='1.2.0'
+VERSION='1.2.1'
 CHANNELS=tuple(p+a for p in ('translate','rotate') for a in 'XYZ')
+
+
+def _place(node, matrix=None, position=None):
+    """Record explicit local values so redo does not refit a changing DAG frame."""
+    import maya.cmds as c
+    import maya.api.OpenMaya as om
+    parent=(c.listRelatives(node,p=True,fullPath=True) or [None])[0]
+    inverse=om.MMatrix(c.xform(parent,q=True,ws=True,m=True)).inverse() if parent else om.MMatrix()
+    if position is not None:
+        point=om.MPoint(*position)*inverse
+        c.setAttr(node+'.translate',point.x,point.y,point.z,type='double3')
+    else:
+        local=om.MTransformationMatrix(om.MMatrix(matrix)*inverse)
+        rotation=local.rotation(asQuaternion=True).asEulerRotation()
+        rotation.reorderIt(c.getAttr(node+'.rotateOrder'))
+        c.setAttr(node+'.translate',*local.translation(om.MSpace.kTransform),type='double3')
+        c.setAttr(node+'.rotate',*[math.degrees(v) for v in rotation],type='double3')
+        c.setAttr(node+'.scale',*local.scale(om.MSpace.kTransform),type='double3')
+        c.setAttr(node+'.shear',*local.shear(om.MSpace.kTransform),type='double3')
 
 
 def build(item,targets,namespace,chest=None):
@@ -22,25 +41,25 @@ def build(item,targets,namespace,chest=None):
         m=list(pose['rotation']);m[12:15]=pose['pivot'];return m
     if not chest:
         chest=c.createNode('transform',name=namespace+':chest_reference',parent=root)
-        m=list(control_frame);m[12:15]=poses[0]['pivot'];c.xform(chest,ws=True,m=m)
+        m=list(control_frame);m[12:15]=poses[0]['pivot'];_place(chest,matrix=m)
     chest_frame=c.createNode('transform',name=namespace+':chest_orientation',parent=chest)
     m=list(control_frame);m[12:15]=c.xform(chest,q=True,ws=True,t=True)
-    c.xform(chest_frame,ws=True,m=m)
+    _place(chest_frame,matrix=m)
     size=float(item['options'].get('control_size',1.0))
     if not math.isfinite(size) or size<=0:raise ValueError('控制器大小必须大于零。')
     distance=math.dist(poses[0]['pivot'],poses[-1]['pivot'])
     radius=max(distance*.5,.1)*size
     head=c.spaceLocator(name=namespace+':Head_ctr1')[0]
     c.parent(head,root,relative=True)
-    c.xform(head,ws=True,t=poses[-1]['pivot'])
+    _place(head,position=poses[-1]['pivot'])
     shape=c.listRelatives(head,s=True)[0]
     c.setAttr(shape+'.localScale',radius*2,radius*2,0,type='double3')
     controls=[];groups=[];blends=[];previous=chest
     for i,pose in enumerate(poses[:-1]):
         zero=c.createNode('transform',name=namespace+':neck{:02d}_blend'.format(i+1),parent=root)
-        c.xform(zero,ws=True,t=pose['pivot'])
+        _place(zero,position=pose['pivot'])
         anchor=c.createNode('transform',name=namespace+':neck{:02d}_anchor'.format(i+1),parent=previous)
-        c.xform(anchor,ws=True,t=pose['pivot'])
+        _place(anchor,position=pose['pivot'])
         c.setAttr(anchor+'.visibility',False)
         c.pointConstraint(anchor,zero,mo=False,name=namespace+':neck{:02d}_position'.format(i+1))
         orient=c.orientConstraint(chest_frame,head,zero,mo=False,name=namespace+':neck{:02d}_orientation'.format(i+1))[0]
@@ -57,7 +76,7 @@ def build(item,targets,namespace,chest=None):
     # point-follow and rotation-blend graphs acyclic, as in the reference file.
     # With no neck controls, previous is the chest/root reference itself.
     head_anchor=c.createNode('transform',name=namespace+':head_anchor',parent=previous)
-    c.xform(head_anchor,ws=True,t=poses[-1]['pivot'])
+    _place(head_anchor,position=poses[-1]['pivot'])
     c.setAttr(head_anchor+'.visibility',False)
     position=c.pointConstraint(head_anchor,head,mo=False,name=namespace+':head_positionConstraint')[0]
     c.addAttr(head,ln='positionOffset',at='double3')
@@ -72,7 +91,7 @@ def build(item,targets,namespace,chest=None):
     drivers=[];bind_offsets={}
     for i,(ctrl,pose) in enumerate(zip(controls,poses)):
         driver=c.createNode('transform',name=namespace+':output_frame'+str(i+1),parent=ctrl)
-        c.xform(driver,ws=True,m=matrix(pose));drivers.append(driver)
+        _place(driver,matrix=matrix(pose));drivers.append(driver)
         bind_offsets[ctrl]=om.MMatrix(c.getAttr(driver+'.matrix'))
     # Solve head rotation first: every neck blend reads it. Then solve necks
     # root-to-tip and finally head translation, without reading driven targets.

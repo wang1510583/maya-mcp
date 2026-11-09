@@ -6,6 +6,12 @@ Angles in the operation graph are radians, distances centimetres, matrices Maya 
 import json, math, hashlib, runpy, sys
 from pathlib import Path
 import maya.cmds as c
+import runpy
+from pathlib import Path
+identity_io=runpy.run_path(str(Path(__file__).with_name('mobile_identity.py')))
+node_identity=identity_io['identity']
+resolve_identity=identity_io['resolve']
+read_metadata=identity_io['read']
 import maya.api.OpenMaya as om
 
 IDENTITY=[1.,0,0,0,0,1.,0,0,0,0,1.,0,0,0,0,1.]
@@ -14,7 +20,7 @@ class Compiler:
     def __init__(self, snapshot):
         self.ops=[]; self.cache={}; self.active=[]; self.inputs={}; self.plugs={}; self.types={}; self.readonly_inputs=set()
         for control in snapshot['controls']:
-            node=c.ls(control.get('nodeId',control['id']),long=True)[0]
+            node=resolve_identity(control.get('nodeId',control['id']))
             for i,a in enumerate(['rotateX','rotateY','rotateZ','translateX','translateY','translateZ']):
                 plugs=control.get('inputPlugs')
                 if plugs is not None and not plugs[i]:continue
@@ -191,7 +197,7 @@ def export(snapshot_path,destination):
     before=fingerprint();compiler=Compiler(snap)
     outputs={}
     for row in snap['controls']+snap['joints']:
-        node=c.ls(row.get('nodeId',row['id']),long=True)[0]
+        node=resolve_identity(row.get('nodeId',row['id']))
         world=c.xform(node,q=True,ws=True,m=True)
         if max(abs(a-b) for a,b in zip(world,row['worldMatrix']))>1e-5:
             raise ValueError('Scene no longer matches the snapshot; export a new snapshot first: '+node)
@@ -204,10 +210,10 @@ def export(snapshot_path,destination):
         if part not in ('arm_L','arm_R'):continue
         root=part_data['root'];side=part[-1];ns=part_data['namespace']
         if not c.objExists(root+'.liveAlignmentData'):continue
-        data=json.loads(c.getAttr(root+'.liveAlignmentData'))
+        data=read_metadata(root+'.liveAlignmentData')
         controls={row['role']:row for row in snap['controls'] if row['part']==part}
         # World IK uses separate custom channels; do not silently reinterpret it.
-        wrist=c.ls(controls['end_fk']['id'],long=True)[0]
+        wrist=resolve_identity(controls['end_fk']['id'])
         if not snap.get('modePanel') and c.objExists(wrist+'.global') and c.getAttr(wrist+'.global')!=0:continue
         frames=[]
         for role in ('shoulder_fk','middle_fk','end_fk','pole_locator'):
@@ -219,27 +225,27 @@ def export(snapshot_path,destination):
             frames.append(dict(id=row['id'],world=world,local=compiler.get(node+'.matrix'),
                 parent=compiler.get(node+'.parentMatrix[0]'),editable=mask,
                 target=compiler.get(data['targets'].get(role,node)+'.worldMatrix[0]')))
-        reset_row=controls['end_locator'];reset_node=c.ls(reset_row['id'],long=True)[0]
+        reset_row=controls['end_locator'];reset_node=resolve_identity(reset_row['id'])
         source=ns+':hand_'+side+'1';reset=[]
         for attr in ('rotateX','rotateY','rotateZ','translateX','translateY','translateZ'):
             plug=zero_channels.resolve(source+'.'+attr)
             reset.append(-zero_channels.offset(plug)-c.getAttr(reset_node+'.'+attr))
         cfg=dict(frames=frames,resetId=reset_row['id'],reset=reset,
                  guards=[compiler.get(ns+':joint'+str(i)+'.worldMatrix[0]') for i in (1,2,3)])
-        for role in ('shoulder_fk','middle_fk','end_fk'):native_arm_gestures[controls[role]['id']]=cfg
+        for role in ('shoulder_fk','middle_fk','end_fk','pole_locator'):native_arm_gestures[controls[role]['id']]=cfg
     native_control_gestures={}
     for row in snap['controls']:
         uid=row['id'];mask=[False]*6
         for rid,axis in compiler.inputs.values():
             if rid==uid:mask[axis]=True
         if not any(mask) or uid in native_arm_gestures or row.get('inputOnly'):continue
-        node=c.ls(uid,long=True)[0]
+        node=resolve_identity(uid)
         if row['part']=='character' or row['part'].startswith(('hand_','generic_')):
             native_control_gestures[uid]=dict(kind='direct',frame=dict(id=uid,world=compiler.get(node+'.worldMatrix[0]'),local=compiler.get(node+'.matrix'),parent=compiler.get(node+'.parentMatrix[0]'),editable=mask))
             continue
         if not c.objExists(node+'.zeroChannelData'):
             raise ValueError('Native editing requires registered zero-control metadata: '+node)
-        data=json.loads(c.getAttr(node+'.zeroChannelData'))
+        data=read_metadata(node+'.zeroChannelData')
         if data['part'].startswith('arm'):
             from maya_agent.rigs import arm_ik_shared
             if not snap.get('modePanel') and arm_ik_shared.active(data['root'],data['role']):
@@ -258,12 +264,22 @@ def export(snapshot_path,destination):
             if uid in native_control_gestures and foot in native_control_gestures:
                 native_control_gestures[uid]['translationTarget']=foot
                 native_control_gestures[foot]['translationOnly']=True
+    for part,foot in feet.items():
+        cfg=native_control_gestures.get(foot)
+        if cfg is None:continue
+        ns=snap['rigMetadata']['parts'][part]['namespace']
+        length,limit=ns+':leng_base',ns+':pivot_feet'
+        if c.objExists(length) and c.objExists(limit):
+            cfg['reach']={'distance':compiler.get(length+'.translateX'),'limit':compiler.get(limit+'.translateX'),'parent':compiler.get(length+'.parentMatrix[0]')}
+        for row in snap['controls']:
+            if row['part']==part and row['role'] in ('heel','toe_end','ball') and row['id'] in native_control_gestures:
+                native_control_gestures[row['id']]['rotationTranslationTarget']=foot
     mode_module=runpy.run_path(str(Path(__file__).with_name('export_modes.py')))
     modes,aliases=mode_module['compile_modes'](snap,compiler)
     skins={}
     for mesh in snap['meshes']:
         if mesh.get('rigidTransform'):
-            node=c.ls(mesh['id'],long=True)[0];sel=om.MSelectionList();sel.add(node);fn=om.MFnMesh(sel.getDagPath(0))
+            node=resolve_identity(mesh['id']);sel=om.MSelectionList();sel.add(node);fn=om.MFnMesh(sel.getDagPath(0))
             skins[mesh['id']]={'inputPositions':[[p.x,p.y,p.z] for p in fn.getPoints(om.MSpace.kObject)],'geomMatrix':IDENTITY,'method':0}
             continue
         skin=mesh['skin']['name']
@@ -281,12 +297,14 @@ def export(snapshot_path,destination):
         if c.getAttr(skin+'.envelope')!=1 or c.getAttr(skin+'.useComponents'):raise ValueError('Unsupported skin envelope or component mode: '+skin)
         p=compiler.plug(skin+'.input[0].inputGeometry');fn=om.MFnMesh(p.asMObject())
         geom=list(om.MFnMatrixData(compiler.plug(skin+'.geomMatrix').asMObject()).matrix())
-        shape=c.ls(mesh['id'],long=True)[0];transform=c.listRelatives(shape,parent=True,fullPath=True)[0]
+        shape=resolve_identity(mesh['id']);transform=c.listRelatives(shape,parent=True,fullPath=True)[0]
         skins[mesh['id']]={'inputPositions':[[v.x,v.y,v.z] for v in fn.getPoints(om.MSpace.kObject)],'geomMatrix':geom,'geomMatrixOp':compiler.get(skin+'.geomMatrix'),'geometryWorldOp':compiler.get(transform+'.worldMatrix[0]'),'method':method,'sourceMethod':source_method}
-    result={'format':'maya-portable-graph','version':1,'sourceSnapshotSha256':hashlib.sha256(snapshot_source.read_bytes()).hexdigest(),
+        skins[mesh['id']]['bindPreMatrixOps']=[compiler.get(skin+'.bindPreMatrix[%d]'%i['logicalIndex']) for i in mesh['skin']['influences']]
+    result={'format':'maya-portable-graph','version':2,'sourceSnapshotSha256':hashlib.sha256(snapshot_source.read_bytes()).hexdigest(),
             'characterId':snap['characterId'],'rigVersion':snap['rigVersion'],'sourceFrame':snap['sourceFrame'],
-            'ops':compiler.ops,'outputs':outputs,'nativeArmGestures':native_arm_gestures,'nativeArmGestureVersion':3,'nativeControlGestures':native_control_gestures,'skins':skins,'editableInputs':{k:list(v) for k,v in compiler.inputs.items()}}
-    result['modePanel']=modes;result['ikAliases']=aliases;result['footTranslationVersion']=1
+            'ops':compiler.ops,'outputs':outputs,'nativeArmGestures':native_arm_gestures,'nativeArmGestureVersion':4,'nativeControlGestures':native_control_gestures,'skins':skins,'editableInputs':{k:list(v) for k,v in compiler.inputs.items()}}
+    result['modePanel']=modes;result['ikAliases']=aliases;result['footTranslationVersion']=2
+    if snap.get('overallScale'):result['overallScale']=snap['overallScale']
     metadata=runpy.run_path(str(Path(__file__).with_name('export_mesh_shading.py')))['mesh_metadata']
     shading={}
     for mesh in snap['meshes']:
@@ -318,7 +336,9 @@ def compact(source,destination):
         cfg['guards']=[visit(i) for i in cfg['guards']]
     for cfg in graph.get('nativeControlGestures',{}).values():
         for key in ('world','local','parent'):cfg['frame'][key]=visit(cfg['frame'][key])
+        if 'reach' in cfg:cfg['reach']={k:visit(v) for k,v in cfg['reach'].items()}
     for skin in graph.get('skins',{}).values():
+        if 'bindPreMatrixOps' in skin:skin['bindPreMatrixOps']=[visit(i) for i in skin['bindPreMatrixOps']]
         if 'geomMatrixOp' in skin:skin['geomMatrixOp']=visit(skin['geomMatrixOp'])
         if 'geometryWorldOp' in skin:skin['geometryWorldOp']=visit(skin['geometryWorldOp'])
     runpy.run_path(str(Path(__file__).with_name('export_modes.py')))['remap_modes'](graph,visit)

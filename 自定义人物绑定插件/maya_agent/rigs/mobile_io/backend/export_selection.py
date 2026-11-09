@@ -1,19 +1,25 @@
 """Explicit additions to one registered character; never gather the whole scene."""
 import json
 import maya.cmds as c
+import runpy
+from pathlib import Path
+identity_io=runpy.run_path(str(Path(__file__).with_name('mobile_identity.py')))
+node_identity=identity_io['identity']
+resolve_identity=identity_io['resolve']
+read_metadata=identity_io['read']
 import maya.api.OpenMaya as om
 
 
 def resolve(root, selection):
     root=c.ls(root,long=True)[0]
-    meta=json.loads(c.getAttr(root+'.integratedRigData'))
+    meta=read_metadata(root+'.integratedRigData')
     members={root}
     for part in meta['parts'].values():
         members.update(c.ls(part.get('root',''),long=True) or [])
         for key in ('controls','zero_controls'):
             for value in part.get(key,{}).values():members.update(c.ls(value,long=True) or [])
     if meta.get('master_control'):members.update(c.ls(meta['master_control'],long=True) or [])
-    for item in meta.get('generic_objects',[]):members.update(c.ls(item['control_uuid'],long=True) or [])
+    for item in meta.get('generic_objects',[]):members.add(identity_io['registered'](item['control_uuid'],root))
     nodes=[]
     for item in selection:
         if '.' in item:raise ValueError('请使用物体选择模式，选择需要追加导出的完整物体，不支持组件选择。')
@@ -48,9 +54,9 @@ def append_rigid(meshes, joints, selected):
         history=c.listHistory(shape) or []
         if any(c.objectType(n,isAType='geometryFilter') for n in history):raise ValueError('额外模型包含未支持的变形器：'+shape)
         sel=om.MSelectionList();sel.add(shape);dp=sel.getDagPath(0);fn=om.MFnMesh(dp)
-        parent=c.listRelatives(shape,p=True,fullPath=True)[0];uid=c.ls(parent,uuid=True)[0]
+        parent=c.listRelatives(shape,p=True,fullPath=True)[0];uid=node_identity(parent)
         joints.add(parent)
-        meshes.append(dict(id=c.ls(shape,uuid=True)[0],name=shape,
+        meshes.append(dict(id=node_identity(shape),name=shape,
             positions=[[p.x,p.y,p.z] for p in fn.getPoints(om.MSpace.kWorld)],triangles=list(fn.getTriangles()[1]),
             rigidTransform=parent,skin=dict(id=uid,name=parent,method=0,
                 influences=[dict(id=uid,path=parent,bindPreMatrix=identity)],weights=[[0,1.] for _ in range(fn.numVertices)]),

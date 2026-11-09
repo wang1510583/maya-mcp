@@ -1,9 +1,15 @@
 """Read-only mesh smoothing topology and Maya normals used to validate offline shading."""
 import maya.cmds as c
+import runpy
+from pathlib import Path
+identity_io=runpy.run_path(str(Path(__file__).with_name('mobile_identity.py')))
+node_identity=identity_io['identity']
+resolve_identity=identity_io['resolve']
+read_metadata=identity_io['read']
 import maya.api.OpenMaya as om
 
 def mesh_metadata(mesh):
- node=c.ls(mesh['id'],long=True)[0];sel=om.MSelectionList();sel.add(node);fn=om.MFnMesh(sel.getDagPath(0));counts,ids=fn.getNormalIds()
+ node=resolve_identity(mesh['id']);sel=om.MSelectionList();sel.add(node);fn=om.MFnMesh(sel.getDagPath(0));counts,ids=fn.getNormalIds()
  if any(fn.isNormalLocked(i) for i in range(fn.numNormals)):return None
  tri_counts,triangles=fn.getTriangles()
  if list(triangles)!=mesh['triangles']:raise ValueError('Mesh shading topology differs from snapshot')

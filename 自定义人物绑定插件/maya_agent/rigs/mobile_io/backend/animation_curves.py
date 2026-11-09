@@ -7,19 +7,34 @@ TANGENTS = ('inTangentType', 'outTangentType', 'inAngle', 'outAngle',
             'inWeight', 'outWeight', 'lock', 'weightLock')
 
 
+def same_source_curve(current, source):
+    """Compare playback data, ignoring Maya's inactive unweighted handle lengths.
+
+    Saving/reopening an unweighted curve normalizes endpoint weights to zero.
+    Those weights have no effect unless weightedTangents is enabled; key values,
+    slopes, tangent types and the weighting switch must still match exactly.
+    """
+    ignored = {'staticValue'} if source['times'] else set()
+    if source['times'] and source.get('weightedTangents') is False and current.get('weightedTangents') is False:
+        ignored.update(('inWeight', 'outWeight', 'weightLock'))
+    return all(current.get(k) == value for k, value in source.items() if k not in ignored)
+
+
 def capture(plug):
     import maya.cmds as c
     drivers = c.listConnections(plug, source=True, destination=False) or []
     if any(c.nodeType(n) not in ('animCurveTA', 'animCurveTL', 'animCurveTU') for n in drivers):
         raise ValueError('不能保留非普通动画曲线: ' + plug)
-    times = c.keyframe(plug, q=True, tc=True) or []
-    result = dict(times=times, values=c.keyframe(plug, q=True, vc=True) or [],
+    # Maya can return no keys for a referenced locked compound-child plug,
+    # although its connected animCurve is keyed. Query the actual curve node.
+    curve = drivers[0] if drivers else plug
+    times = c.keyframe(curve, q=True, tc=True) or []
+    result = dict(times=times, values=c.keyframe(curve, q=True, vc=True) or [],
                   staticValue=float(c.getAttr(plug)))
     if times:
-        result.update({f: c.keyTangent(plug, q=True, **{f: True}) for f in TANGENTS})
-        result['weightedTangents'] = bool(c.keyTangent(plug, q=True, weightedTangents=True)[0])
-        result['breakdownTimes'] = c.keyframe(plug, q=True, breakdown=True, tc=True) or []
-        curve = drivers[0]
+        result.update({f: c.keyTangent(curve, q=True, **{f: True}) for f in TANGENTS})
+        result['weightedTangents'] = bool(c.keyTangent(curve, q=True, weightedTangents=True)[0])
+        result['breakdownTimes'] = c.keyframe(curve, q=True, breakdown=True, tc=True) or []
         for field in ('preInfinity', 'postInfinity', 'rotationInterpolation'):
             if c.attributeQuery(field, node=curve, exists=True):
                 result[field] = c.getAttr(curve + '.' + field)

@@ -3,6 +3,12 @@ import math
 import runpy
 from pathlib import Path
 import maya.cmds as c
+import runpy
+from pathlib import Path
+identity_io=runpy.run_path(str(Path(__file__).with_name('mobile_identity.py')))
+node_identity=identity_io['identity']
+resolve_identity=identity_io['resolve']
+read_metadata=identity_io['read']
 import maya.api.OpenMaya as om
 
 TR = ('translateX', 'translateY', 'translateZ', 'rotateX', 'rotateY', 'rotateZ')
@@ -50,7 +56,7 @@ def capture(shape):
                 curves[attr] = data
             except ValueError as error:
                 errors.append(str(error))
-        nodes.append(dict(id=c.ls(node, uuid=True)[0], curves=curves,
+        nodes.append(dict(id=node_identity(node), curves=curves,
                           type=c.nodeType(node)))
     return dict(version=1, nodes=nodes, errors=errors)
 
@@ -118,7 +124,7 @@ def prepare(package, snapshot, time_scale=1.):
     result, count = {}, 0
     io = curve_io()
     for uid, row in sources.items():
-        found = c.ls(uid, long=True) or []
+        found = [resolve_identity(uid)]
         if len(found) != 1 or c.nodeType(found[0]) != 'camera':
             raise ValueError('源相机 UUID 未唯一匹配')
         shape = found[0]
@@ -127,7 +133,7 @@ def prepare(package, snapshot, time_scale=1.):
         if source.get('version') != 1 or source.get('errors'):
             raise ValueError('相机包含动画层、约束或不支持的曲线，不能无损回传：' + shape)
         records = source.get('nodes', [])
-        if [r.get('id') for r in records] != [c.ls(n, uuid=True)[0] for n in nodes]:
+        if [r.get('id') for r in records] != [node_identity(n) for n in nodes]:
             raise ValueError('相机父级关系已改变，不能回传：' + shape)
         curves = {}
         for node, record in zip(nodes, records):

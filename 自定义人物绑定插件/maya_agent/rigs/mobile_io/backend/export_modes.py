@@ -2,6 +2,12 @@
 import json
 import math
 import maya.cmds as c
+import runpy
+from pathlib import Path
+identity_io=runpy.run_path(str(Path(__file__).with_name('mobile_identity.py')))
+node_identity=identity_io['identity']
+resolve_identity=identity_io['resolve']
+read_metadata=identity_io['read']
 import maya.api.OpenMaya as om
 TR=('rotateX','rotateY','rotateZ','translateX','translateY','translateZ')
 IDENTITY=[1.,0,0,0,0,1.,0,0,0,0,1.,0,0,0,0,1.]
@@ -26,14 +32,14 @@ def extend_snapshot(snap):
         node=c.ls(node,long=True)[0];channels={}
         for a,p in zip(TR,plugs):
             if p:channels[a]=dict(value=channel_number(c.getAttr(p),p),locked=c.getAttr(p,lock=True))
-        data=dict(id=uid,nodeId=c.ls(node,uuid=True)[0],role=role,part='internal',path=node,name=node.rsplit('|',1)[-1],
+        data=dict(id=uid,nodeId=node_identity(node),role=role,part='internal',path=node,name=node.rsplit('|',1)[-1],
             position=c.xform(node,q=True,ws=True,t=True),worldMatrix=c.xform(node,q=True,ws=True,m=True),
             rotateOrder=c.getAttr(node+'.rotateOrder'),channels=channels,curves=[],visible=False,inputOnly=True,inputPlugs=plugs)
         snap['controls'].append(data)
         return uid
     def scalar(plug,role):
         plug=canonical(plug);node,attr=plug.rsplit('.',1)
-        uid=c.ls(node,uuid=True)[0]+'.'+attr
+        uid=node_identity(node)+'.'+attr
         if not any(r['id']==uid for r in snap['controls']):
             axis=0 if c.getAttr(plug,type=True)=='doubleAngle' else 3
             plugs=[None]*6;plugs[axis]=plug;row(node,uid,role,plugs)
@@ -44,7 +50,7 @@ def extend_snapshot(snap):
         if key.startswith('wrist_'):
             cfg['ikIds']={}
             for role,node in data['controls'].items():
-                uid=c.ls(node,uuid=True)[0];cfg['ikIds'][role]=uid
+                uid=node_identity(node);cfg['ikIds'][role]=uid
                 if not any(r['id']==uid for r in snap['controls']):row(node,uid,key+'_'+role,[node+'.'+a for a in TR])
             cfg['stretchId']=scalar(data['stretch_plug'],key+'_stretch')
             cfg['offsetIds']=[scalar(p,key+'_offset') for p in data['offset_attrs']]
@@ -52,9 +58,12 @@ def extend_snapshot(snap):
         elif key.startswith('generic_'):
             cfg['offsetIds']=[]
             for i,node in enumerate(data['offsets']):
-                uid=c.ls(node,uuid=True)[0]
+                uid=node_identity(node)
                 cfg['offsetIds'].append(row(node,uid,key+'_match'+str(i),[node+'.'+a for a in TR]))
         modes[key]=cfg
+    master=metadata.get('master_control')
+    if master and c.objExists(master+'.overallScale'):
+        snap['overallScale']={'id':scalar(master+'.overallScale','overallScale'),'base':c.getAttr(master+'.overallScale'),'minimum':0.001}
     snap['modePanel']=modes
     # Source skeleton ancestors and auxiliary joints can retain their own
     # animation. Preserve these upstream inputs instead of freezing curves at
@@ -82,7 +91,7 @@ def extend_snapshot(snap):
                 if not parents:break
                 node=parents[0];nodes.append(node)
     for item in metadata.get('generic_objects',[]):
-        node=c.ls(item['target_uuid'],long=True)[0];nodes.append(node)
+        node=identity_io['registered'](item['target_uuid'], metadata['root']);nodes.append(node)
         nodes.extend(c.listRelatives(node,ad=True,fullPath=True,type='transform') or [])
     history=(c.listHistory(nodes) or []) if nodes else []
     for node in sorted(set(nodes+history)):
@@ -105,7 +114,7 @@ def compile_modes(snap,cc):
     destinations={}
     for part in snap['rigMetadata']['parts'].values():
         if c.objExists(part['root']+'.liveAlignmentData'):
-            destinations.update({e['source']:e['proxy'] for e in json.loads(c.getAttr(part['root']+'.liveAlignmentData'))['entries']})
+            destinations.update({e['source']:e['proxy'] for e in read_metadata(part['root']+'.liveAlignmentData')['entries']})
     def editable_plug(p):return zero_channels.resolve(destinations.get(p,p))
     def get(n,a):return cc.get(n+'.'+a)
     def input_ref(plug):
@@ -171,8 +180,8 @@ def compile_modes(snap,cc):
                 f['world']=get(d['compensation'],'worldMatrix[0]')
                 f['parent']=get(d['group'],'worldMatrix[0]')
                 frames.append(f)
-            control=c.ls(d['control_uuid'],long=True)[0];target=c.ls(d['target_uuid'],long=True)[0]
-            cfg.update(kind='generic',frames=frames,controlId=d['control_uuid'])
+            control=identity_io['registered'](d['control_uuid'],source['owner']);target=identity_io['registered'](d['target_uuid'],source['owner'])
+            cfg.update(kind='generic',frames=frames,controlId=node_identity(control))
             cfg['guards']=[get(control,'worldMatrix[0]'),get(target,'worldMatrix[0]')]
         else:cfg.update(kind='space',frame=frame(d['source']))
         result[key]=cfg

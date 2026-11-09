@@ -49,9 +49,10 @@ def module(name):return runpy.run_path(str(BACKEND/(name+'.py')))
 def roots():return sorted(c.ls('*.integratedRigData',objectsOnly=True,long=True,recursive=True) or [])
 
 def identity(root):
-    found=c.ls(root,long=True) or []
+    found=[runpy.run_path(str(Path(__file__).parent/'backend/mobile_identity.py'))['resolve'](root)] if '@' in root else (c.ls(root,long=True) or [])
     if len(found)!=1 or not c.objExists(found[0]+'.integratedRigData'):raise ValueError('请选择当前场景中的集成角色绑定。')
-    return found[0],c.ls(found[0],uuid=True)[0],json.loads(c.getAttr(found[0]+'.integratedRigData'))
+    io=runpy.run_path(str(Path(__file__).parent/'backend/mobile_identity.py'))
+    return found[0],io['identity'](found[0]),io['read'](found[0]+'.integratedRigData')
 
 def read_project(path,root=None):
     p=Path(path)

@@ -3,7 +3,7 @@ import json
 import math
 from pathlib import Path
 
-VERSION = '1.0.3'
+VERSION = '1.0.4'
 DATA = Path(__file__).parent / 'data' / 'controller_shapes_v1.json'
 HELPERS = {'parameters', 'settings', 'roll', 'end_locator'}
 DISPLAY = ('overrideEnabled', 'overrideRGBColors', 'overrideColor',
@@ -32,7 +32,32 @@ def measure(key, targets):
             scale = om.MTransformationMatrix(om.MMatrix(c.xform(targets[0], q=True, ws=True, m=True))).scale(om.MSpace.kWorld)
             return dict(lengths=[], fallback_scale=abs(scale[0]), method='transform_scale')
         lengths = [length]
-    return dict(lengths=lengths, method=method)
+    metrics=dict(lengths=lengths, method=method)
+    if key.startswith('shoulder'):
+        # Integrated construction uses parentless output proxies. Capture the
+        # real clavicle-to-arm direction here, before those proxies are made.
+        children=c.listRelatives(targets[0],children=True,type='joint',fullPath=True) or []
+        if children:
+            import maya.api.OpenMaya as om
+            direction=om.MVector(*c.xform(children[0],q=True,ws=True,rp=True))-om.MVector(*points[0])
+            if direction.length()>1e-6:
+                rotation=om.MTransformationMatrix(om.MMatrix(c.xform(targets[0],q=True,ws=True,m=True))).rotation(asQuaternion=True)
+                metrics['shoulder_direction']=list(direction.rotateBy(rotation.inverse()).normal())
+    return metrics
+
+
+def shoulder_rotation(reference, direction):
+    """Align a captured shape's length axis without an unstable 180-degree roll."""
+    import maya.api.OpenMaya as om
+    a=om.MVector(*reference).normal();b=om.MVector(*direction).normal()
+    first=om.MQuaternion()
+    if a*b<0:
+        up=om.MVector(0,0,1)
+        up=up-a*(up*a)
+        if up.length()<1e-6:up=om.MVector(0,1,0)-a*a.y
+        first=om.MQuaternion(math.pi,up.normal())
+    turned=a.rotateBy(first)
+    return first*turned.rotateTo(b)
 
 
 def _size(key, role, metrics):
@@ -141,6 +166,10 @@ def apply(rig, key, targets=None, metrics=None, multiplier=1.0, created=None):
             source_role = _role(role, source['controls'], rig['controls'])
             if source_role not in source['controls']: continue
             artwork = source['controls'][source_role]
+            alignment=None
+            if key.startswith('shoulder') and metrics.get('shoulder_direction'):
+                reference=source.get('artwork_axis',source['metrics'].get('shoulder_direction'))
+                if reference:alignment=shoulder_rotation(reference,metrics['shoulder_direction'])
             actual = _size(key, role, metrics)
             reference = _size(key, source_role, source['metrics'])
             factor = (actual/reference if actual is not None else metrics['fallback_scale'])*multiplier
@@ -161,8 +190,11 @@ def apply(rig, key, targets=None, metrics=None, multiplier=1.0, created=None):
             for index, item in enumerate(artwork['shapes']):
                 name = node.rsplit('|', 1)[-1]+'_artShape'+str(index)
                 if item['type'] == 'nurbsCurve':
-                    points = [tuple(pivot[i]+p[i]*factor/scale[i] for i in range(3))+(p[3],)
-                              for p in item['points']]
+                    points=[]
+                    for p in item['points']:
+                        v=om.MVector(*p[:3])
+                        if alignment is not None:v=v.rotateBy(alignment)
+                        points.append(tuple(pivot[i]+v[i]*factor/scale[i] for i in range(3))+(p[3],))
                     temporary = c.curve(name=rig['namespace']+':artworkTemp', degree=item['degree'],
                                         pointWeight=points, knot=item['knots'], periodic=item['form']==3)
                     try:
@@ -184,6 +216,9 @@ def apply(rig, key, targets=None, metrics=None, multiplier=1.0, created=None):
                 c.addAttr(shape, ln='controllerArtwork', at='bool', defaultValue=True)
                 shapes.append(shape)
             report[role] = dict(template_role=source_role, scale=factor, shapes=shapes)
+            if alignment is not None:
+                report[role]['axis_alignment']=list(alignment)
+                report[role]['shoulder_direction']=metrics['shoulder_direction']
         rig['appearance'] = dict(version=VERSION, template=DATA.name, metrics=metrics, controls=report)
         rig.setdefault('nodes', []).extend(new_nodes)
         return rig['appearance']
