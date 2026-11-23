@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 import sys
 
-VERSION='1.0.6'
+VERSION='1.0.7'
 ROOT=Path(__file__).resolve().parent
 WINDOW='BencaoCharacterRig'
 _callbacks=globals().get('_callbacks',[])

@@ -100,6 +100,9 @@ def fit(rig, samples, lengths):
 
 def connect(rig, samples, drivers=None):
     import maya.cmds as c
+    from maya_agent.rigs.rotation_limits import disable,record
+    disable(samples)
+    rig['original_rotation_limits']=record(samples)
     mappings = []
     for i, (joint, sample) in enumerate(zip(rig['joints'], samples), 1):
         driver = drivers[i-1] if drivers else joint
@@ -176,6 +179,8 @@ def build_from_selection(targets=None, namespace='customArm', drive_targets=True
             if c.namespace(exists=rig['namespace']): c.namespace(removeNamespace=rig['namespace'])
         if transfer:transfer.rollback()
         elif not copy_animation:restore(samples)
+        from maya_agent.rigs.rotation_limits import restore as restore_limits
+        restore_limits(samples)
         raise
     finally:
         try:

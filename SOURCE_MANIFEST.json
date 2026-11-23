@@ -1,6 +1,6 @@
 {
-  "core_version": "1.27.1",
-  "assistant_version": "1.0.6",
+  "core_version": "1.27.3",
+  "assistant_version": "1.0.7",
   "files": [
     {
       "path": ".gitignore",
@@ -46,15 +46,15 @@
     },
     {
       "path": "README.md",
-      "bytes": 7391,
-      "sha256": "07a5641a0c4133e152d6e2b1441fb5631f026c54ba7ea0017e2a19bab52cf101",
-      "git_blob": "c69dc4140f6bd4b23b86f34ef4910c80c48088c9"
+      "bytes": 7626,
+      "sha256": "abc3733f14bed26b6668f366bd187a8cb9438f2d815717a942ab4db75faa4951",
+      "git_blob": "105f98baa8f78b01953e5f067bbb3a6f53995771"
     },
     {
       "path": "SHA256SUMS.txt",
       "bytes": 179,
-      "sha256": "5e24dd9720057d5b27008b8efd0faabf000fc15dd281f96723f51874da4afef3",
-      "git_blob": "bd51860598db73f548dedbcf0b89586818b46e94"
+      "sha256": "a3c7c17d992b4ef92fae40a09c79f053f18624fb3f070f4e10bda9e312bae37a",
+      "git_blob": "92b2e40f1a30d3a85da24b848b80eaa3a360d7f0"
     },
     {
       "path": "config/default_config.yaml",
@@ -779,8 +779,8 @@
     {
       "path": "runtime_assistant/rig_runtime_assistant.py",
       "bytes": 6218,
-      "sha256": "6dcfface2242a5b7a25e6d10aee26c430e3a2629cb83165e21ce622e21ab477d",
-      "git_blob": "cf2585eb6f9fee15378900028a948acfc68ac4cd"
+      "sha256": "b2dfef39bd5a3dbc79c3c8d4a843cbc797c58be098d823a65776c5cf4ade8417",
+      "git_blob": "1f3a9e0859dff6bcf44e8d109abb95b4bf807102"
     },
     {
       "path": "runtime_assistant/安装本草角色绑定.py",
@@ -790,9 +790,9 @@
     },
     {
       "path": "runtime_assistant/给动画师的使用说明.md",
-      "bytes": 5429,
-      "sha256": "a76680d90316c125dadbc191d335e8e314bf67b158daf62c1732ff8a32932242",
-      "git_blob": "9363b33f47aff84bfd8c5f9f0cb8826b06c1686d"
+      "bytes": 5889,
+      "sha256": "631a40c9bcfcae4c57c23ed4d95734e11812ad2ae84ab9b799f7d55397353f13",
+      "git_blob": "8cd4189b6c2456aa439f98aa259d3581b041efce"
     },
     {
       "path": "scripts/activate_maya_mcp.py",
@@ -862,9 +862,9 @@
     },
     {
       "path": "scripts/package_integrated_rig.py",
-      "bytes": 2784,
-      "sha256": "a902306a564c6a4c0533514ae30c7194548b3e5c3685ede1871469bb971275c4",
-      "git_blob": "84a79ac49c643805df0284496905afa8d1c655c6"
+      "bytes": 3046,
+      "sha256": "e2f1b066004e55947e4c181e3ed8f3cf34467841ef534890694e90ce5daddbfc",
+      "git_blob": "06d16ea21bf53df028a1bfdc517e31fbd1422160"
     },
     {
       "path": "scripts/package_leg_template.py",
@@ -875,8 +875,8 @@
     {
       "path": "scripts/package_runtime_assistant.py",
       "bytes": 3047,
-      "sha256": "930b1b29d1367bc0d4f2578876e39b64e330140e11876a43673bf81ff89aa2ac",
-      "git_blob": "8b9d2570e1149acb6baeaa3fee8f9d36f360f2b5"
+      "sha256": "8edc317cb9816f7b790bd0a1ef0f75d4576e2982fb969a4edaac75d1c0e7621e",
+      "git_blob": "dd48de85605a0f4a76d541b50713e4d60b63de0e"
     },
     {
       "path": "scripts/package_soft_limb_template.py",
@@ -1359,6 +1359,12 @@
       "git_blob": "9e596bd73b860f7e9a453efe79b39e7430aea0fd"
     },
     {
+      "path": "scripts/test_input_recovery_undo_live.py",
+      "bytes": 3004,
+      "sha256": "7292682c6fc0bb33af581e7ae1902c3c6d6e07e391677b7b867467eb4ea9d9d5",
+      "git_blob": "796b217dc8fbbc495feb3c4104fb0b81f752b692"
+    },
+    {
       "path": "scripts/test_integrated_body_root_live.py",
       "bytes": 2630,
       "sha256": "03c8b6e77e4bb5efd20a662b8647e1d35a636c074410706d63c32cb32ebb50de",
@@ -1405,6 +1411,12 @@
       "bytes": 6913,
       "sha256": "da1f439a54ca67e25ccbe1cf000813a61935ee9273325f2c2088e7bd8c2b7f5b",
       "git_blob": "5af4499d8268e52cd77118365d8c12a6b1071fb0"
+    },
+    {
+      "path": "scripts/test_interrupted_inputs_live.py",
+      "bytes": 5823,
+      "sha256": "a8950886921afd4637a2d03c491022431c594d1c691786d4d913b923f39d63a4",
+      "git_blob": "7874c12e9573e38a473a0a4aee72f085527b7b42"
     },
     {
       "path": "scripts/test_knee_space_live.py",
@@ -1665,6 +1677,12 @@
       "git_blob": "b3b6c83d5b2304b1c1c6b7ac8c3cf467054043ec"
     },
     {
+      "path": "scripts/test_static_rotate_order_live.py",
+      "bytes": 6509,
+      "sha256": "482a5831823b193f52f339dcce3da90fe55f9438372c7d23b03d9b0b26f53621",
+      "git_blob": "d26c27da4495fd364aa0fcad4c80a59b66202ea7"
+    },
+    {
       "path": "scripts/test_switch_panel.py",
       "bytes": 4239,
       "sha256": "8d9d1c0c012d30477972568a6512a078e2df1de07487412311478f95de8873f1",
@@ -1822,21 +1840,21 @@
     },
     {
       "path": "本草角色绑定.py",
-      "bytes": 353538,
-      "sha256": "32461fdc15e7e5b7cbc50f8c2b44c8c0152423f96f694d5a41267c41435501b0",
-      "git_blob": "f4147ee876bf6b83a12db1c5df292153287e5dbf"
+      "bytes": 368362,
+      "sha256": "d39dd266b9ba6ebe1725f5450c2a80bda97e79bfa5b6156ba0f3ad98e8e95683",
+      "git_blob": "1866eac575d00b22e4837b3756d9ad55d74565b0"
     },
     {
       "path": "本草角色绑定.zip",
-      "bytes": 256611,
-      "sha256": "2f7eec412be96c8552928fcb91448d9886d2d66d00249fd744ffaa32f7ca7c5d",
-      "git_blob": "d12564f5a2efc5ca5722dc86ef83c554f1ba67d7"
+      "bytes": 267442,
+      "sha256": "801eb388482ecb2844f581e40b827a0706d54537926a8b1faadd0c60eb70e650",
+      "git_blob": "d1b3c86345b387cacd63bafc2a54299a5ab6fe7c"
     },
     {
       "path": "本草角色绑定/manifest.json",
-      "bytes": 15615,
-      "sha256": "5ffba816f04980dc500fbfc7b405bf472c679c181d418e1f1900b22b51968af3",
-      "git_blob": "8c681958a44621a8f2a55f7febf07300a961fc49"
+      "bytes": 16297,
+      "sha256": "002833fb844ec8cd4002d20bc64c9e8da6182940d33c65b2db88bf72e50e777b",
+      "git_blob": "35976290b4e9769b551580669b02c46490a2a4fc"
     },
     {
       "path": "本草角色绑定/maya_agent/__init__.py",
@@ -1894,15 +1912,15 @@
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/controller_shapes/__init__.py",
-      "bytes": 10117,
-      "sha256": "71bf8b6d8b6b7488d3b5dfdf9e937cc84e058038efdb6d5d4f9c0eeb577042a6",
-      "git_blob": "131ea363f643b0ce0bfc3e1433f8c2e92ac4ae41"
+      "bytes": 11992,
+      "sha256": "db18d5d7c87d00880cc8b854afdff27c906158202f3a54bf68f7082d5f767e3e",
+      "git_blob": "5eac8e6c74a3fa97b3c633145b9feac3322fcfa8"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/controller_shapes/data/controller_shapes_v1.json",
-      "bytes": 144576,
-      "sha256": "ae9688f83d57051512d0100ec04371ca63579b2a0e082109dcdeabf41b752ba8",
-      "git_blob": "6897ab24b8bce31f4afed52dd6f56f406490dc4c"
+      "bytes": 145111,
+      "sha256": "bf66f68099302e251ae834c6167371eeb2992fc9b88f2348e9a3cb04518a8b50",
+      "git_blob": "a00cb19264482fa2fbc9d687b01c153261e0deda"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/custom_body/__init__.py",
@@ -2026,15 +2044,21 @@
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/custom_body/targets.py",
-      "bytes": 8555,
-      "sha256": "7a6b8b7eaab91bc5424b0bfb591d7fe8b2e98be7fc20453ff05700675eebaa13",
-      "git_blob": "e26af72849f7c76dd5198661261f649dda6789f8"
+      "bytes": 9003,
+      "sha256": "34562fcef883d7be55576b207860ea9ec1533f81fb1108c5fa99af83c1278a4a",
+      "git_blob": "74455f97ccc6ee3d2239292673d0ee3be28bf1f3"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/custom_body/topology.py",
       "bytes": 8686,
       "sha256": "dbb93f1c757ed7a2b25f8d2c825d8fb2c9218dec887960d3e7ef98c7034d3f9c",
       "git_blob": "839ae8b957162ed4a68229863a8966a7b3bfe7f0"
+    },
+    {
+      "path": "本草角色绑定/maya_agent/rigs/euler_tools.py",
+      "bytes": 12188,
+      "sha256": "4dd1d5f43a6288872801c87ce45ad4adbd7f4a90d415960c49191f7316358f42",
+      "git_blob": "6a7384197f9986deef15ecb9895818ab35dfc486"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/external_constraints.py",
@@ -2074,15 +2098,21 @@
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/head_neck/__init__.py",
-      "bytes": 7156,
-      "sha256": "21947eb6c17185ef61bc23036e68349e21278b63576306c52e147a361a3e40dc",
-      "git_blob": "b3f8ff9629a037611739deec0e2ae3753a424dcd"
+      "bytes": 8196,
+      "sha256": "0a62432211d62a45f4aff9b9d542a41d853c9dcea10f04aeafa3f5aadcae8257",
+      "git_blob": "ecdba654e1c072c45767a68e09449e92765de754"
+    },
+    {
+      "path": "本草角色绑定/maya_agent/rigs/input_recovery.py",
+      "bytes": 5636,
+      "sha256": "05871e9ead8c0df38bf2a19ff0cfb0b02b91304d6cb73183c5376223f79f8524",
+      "git_blob": "b4430e19b4fb104095514a96849c5015f718f456"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/integrated/__init__.py",
-      "bytes": 1320,
-      "sha256": "4edab8e6ce175b2d49b37f5ab631da488d4d0b6763eaf7bfff5ff33f277d2fa6",
-      "git_blob": "a0370a8ce153efa54fa75aadbbd0edf0504d5e2c"
+      "bytes": 1319,
+      "sha256": "76a102e7cad5867cda35d9503f4d389cd299b035e580be57d313023b309c127e",
+      "git_blob": "291b6c7a369b720a083ffe5b0e646ca14160984d"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/integrated/attachments.py",
@@ -2092,9 +2122,9 @@
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/integrated/builder.py",
-      "bytes": 24794,
-      "sha256": "0072898d3fc2f90de86119ace0f1ce0d879fee8bda002ea4b5a4303d0c21ff9e",
-      "git_blob": "4e685a8684349a30ca170076123a9663d1bcf9d2"
+      "bytes": 26859,
+      "sha256": "969ade4408a3b099dad89d575e78f00c94d45d6baf8af15926492d7eaae8f728",
+      "git_blob": "b85e5ef14cf44432d590717f6611413e6af82705"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/integrated/display.py",
@@ -2137,6 +2167,12 @@
       "bytes": 2897,
       "sha256": "39abfa016c0507543cded422ba6a6d43d47d44bec0e6bfd3384037e6d12ddf7e",
       "git_blob": "cc14b4b1377d7bdd69c584a773c03edb82b94bdf"
+    },
+    {
+      "path": "本草角色绑定/maya_agent/rigs/integrated/input_transfer.py",
+      "bytes": 3161,
+      "sha256": "e7b41cc74d6b7afa8c576acc5d784ef53accbe400ae9ae3b651046a3aae5da01",
+      "git_blob": "b452c8a0f0359293b0621b2b7aa87f7145589762"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/integrated/master_control.py",
@@ -2188,9 +2224,9 @@
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/live_edit.py",
-      "bytes": 31287,
-      "sha256": "112267cb470d6e417fa91ba8c4dac8d21d9322eba412fca358d2cb759bf6f68a",
-      "git_blob": "c73579d36937953986f48736464fdece09891aa8"
+      "bytes": 31365,
+      "sha256": "e27eada96377104577ea275a310a2bf2db81cb2dfd821fe7f4945c0c89fd0267",
+      "git_blob": "37dced30a8cff2b667f119df7b7f8b3ab8186ef9"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/live_layers.py",
@@ -2227,6 +2263,12 @@
       "bytes": 4892,
       "sha256": "4563a02167ce33a7c8d2cfcb822cac207f5e044ecbfad71de8eaf863fc7b3af6",
       "git_blob": "6a24b8faf57ef9193da95be2040981dfab76ac50"
+    },
+    {
+      "path": "本草角色绑定/maya_agent/rigs/rotation_limits.py",
+      "bytes": 1842,
+      "sha256": "f7ba8d7d66262b35f5b3514bcd475a56be0adc7e9a42fbf4cb274434f73468ae",
+      "git_blob": "120302f420c19ce26ff4529139b594a176e68855"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/runtime_plugin.py",
@@ -2284,9 +2326,9 @@
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/soft_leg/selection.py",
-      "bytes": 7685,
-      "sha256": "73536b2b9c715e7fe718c4d5712bcf7d15ce57f720e32be9cf44f14c2bbaebdc",
-      "git_blob": "726bcaf3e3036eb01062a58561c9c6419585f562"
+      "bytes": 7803,
+      "sha256": "438c51b85536453bafa6df81b723e87b902ad5e90b86e3bd2e5ac0d0980c87a8",
+      "git_blob": "8218effacc24e8285156004eeabbb32a624ddedd"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/soft_limb/__init__.py",
@@ -2320,9 +2362,9 @@
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/soft_limb/selection.py",
-      "bytes": 9855,
-      "sha256": "d8e89bfcbf848a4f8a6d1a1f64aac5ac8fcf425ab7dafde1ebd6cc665a5bfd75",
-      "git_blob": "df2685033cd1804819945c30b5487fb837613110"
+      "bytes": 10101,
+      "sha256": "6614e6d70da593bb4e1f6a539904f8f0cea0257d03428ad489a6cf047435243f",
+      "git_blob": "9830616fd2eae4051fc233c939e2b9d6891ed80f"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/soft_limb/sides.py",
@@ -2350,9 +2392,9 @@
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/zero_channels.py",
-      "bytes": 17118,
-      "sha256": "df258eb8a4f998a87d30e73392e946d8802a16679cddf4b2259de5461fc3d838",
-      "git_blob": "48e275fc487a08f4d390dbfe31cc9744bc3e6986"
+      "bytes": 17664,
+      "sha256": "bac86cd7dd5b4eac2fb4304379fa37aa1eb0ee54b5162fbc2d4d8e8801a6666e",
+      "git_blob": "09563913085d402a7a111368812fd89837cf5606"
     },
     {
       "path": "本草角色绑定/maya_agent/rigs/zero_manual.py",
@@ -2363,8 +2405,8 @@
     {
       "path": "本草角色绑定/rig_runtime_assistant.py",
       "bytes": 6218,
-      "sha256": "6dcfface2242a5b7a25e6d10aee26c430e3a2629cb83165e21ce622e21ab477d",
-      "git_blob": "cf2585eb6f9fee15378900028a948acfc68ac4cd"
+      "sha256": "b2dfef39bd5a3dbc79c3c8d4a843cbc797c58be098d823a65776c5cf4ade8417",
+      "git_blob": "1f3a9e0859dff6bcf44e8d109abb95b4bf807102"
     },
     {
       "path": "本草角色绑定/安装本草角色绑定.py",
@@ -2374,9 +2416,9 @@
     },
     {
       "path": "本草角色绑定/给动画师的使用说明.md",
-      "bytes": 5429,
-      "sha256": "a76680d90316c125dadbc191d335e8e314bf67b158daf62c1732ff8a32932242",
-      "git_blob": "9363b33f47aff84bfd8c5f9f0cb8826b06c1686d"
+      "bytes": 5889,
+      "sha256": "631a40c9bcfcae4c57c23ed4d95734e11812ad2ae84ab9b799f7d55397353f13",
+      "git_blob": "8cd4189b6c2456aa439f98aa259d3581b041efce"
     },
     {
       "path": "欧拉转换工具/maya_speed_slider.py",
@@ -2404,9 +2446,9 @@
     },
     {
       "path": "自定义人物绑定插件/manifest.json",
-      "bytes": 24857,
-      "sha256": "a593151b273958b229ca2d0db3fe390d42f35c201c34c9826549533ea61e9026",
-      "git_blob": "ea708436e959dde20ff3c8d23c8bb077f90912c5"
+      "bytes": 25756,
+      "sha256": "ac579af7d9e3f0d3b7aca7fa958167daef498fe542a7a367b5bbcca53a1db05d",
+      "git_blob": "260c07cffa931bc24c7d7ac3f49288efc2782263"
     },
     {
       "path": "自定义人物绑定插件/max_mcp/__init__.py",
@@ -2686,9 +2728,9 @@
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/custom_body/targets.py",
-      "bytes": 9003,
-      "sha256": "34562fcef883d7be55576b207860ea9ec1533f81fb1108c5fa99af83c1278a4a",
-      "git_blob": "74455f97ccc6ee3d2239292673d0ee3be28bf1f3"
+      "bytes": 10879,
+      "sha256": "9d67e20a538285ba16f51d5ca69921c056d4e7d1c75a292f3d7cf809c0e2eacd",
+      "git_blob": "a7af5cf9603af56c2bec67aab92f8144e51b7e9b"
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/custom_body/topology.py",
@@ -2781,16 +2823,22 @@
       "git_blob": "507dec3f1d5e45210a29a82ff7ebaf4274abf40b"
     },
     {
+      "path": "自定义人物绑定插件/maya_agent/rigs/input_recovery.py",
+      "bytes": 5636,
+      "sha256": "05871e9ead8c0df38bf2a19ff0cfb0b02b91304d6cb73183c5376223f79f8524",
+      "git_blob": "b4430e19b4fb104095514a96849c5015f718f456"
+    },
+    {
       "path": "自定义人物绑定插件/maya_agent/rigs/integrated/README.md",
-      "bytes": 82922,
-      "sha256": "bc1254751d77a32be71839d2e4be1c83a1a78e97a136b4d9df5380f98a780293",
-      "git_blob": "16dc4fa602c59f3654e66a26d70575fc1e7270e6"
+      "bytes": 84835,
+      "sha256": "b6dd0f1ff4709e7f01d0421fe6f9871d48c44a6ed5ab37126336b5592b9dad3e",
+      "git_blob": "7b58fd7010c6025037ac4b17920e450aecb9330d"
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/integrated/__init__.py",
       "bytes": 1319,
-      "sha256": "a1cd91444ca5f811130fb9db2d56af668d57a7eb2e883623636a663ac653ca57",
-      "git_blob": "8654f5e419530441a1d1e429a5ce70ac3b66f7c0"
+      "sha256": "64a67e44911af5357ffaa96845809278923829f581a03ecbc0cba8c01757cb01",
+      "git_blob": "24fdd88039cac602dc7e10d49c247ddd09a4fa59"
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/integrated/attachments.py",
@@ -2914,9 +2962,9 @@
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/live_edit.py",
-      "bytes": 31287,
-      "sha256": "112267cb470d6e417fa91ba8c4dac8d21d9322eba412fca358d2cb759bf6f68a",
-      "git_blob": "c73579d36937953986f48736464fdece09891aa8"
+      "bytes": 31365,
+      "sha256": "e27eada96377104577ea275a310a2bf2db81cb2dfd821fe7f4945c0c89fd0267",
+      "git_blob": "37dced30a8cff2b667f119df7b7f8b3ab8186ef9"
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/live_layers.py",
@@ -3232,9 +3280,9 @@
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/zero_channels.py",
-      "bytes": 17118,
-      "sha256": "df258eb8a4f998a87d30e73392e946d8802a16679cddf4b2259de5461fc3d838",
-      "git_blob": "48e275fc487a08f4d390dbfe31cc9744bc3e6986"
+      "bytes": 17664,
+      "sha256": "bac86cd7dd5b4eac2fb4304379fa37aa1eb0ee54b5162fbc2d4d8e8801a6666e",
+      "git_blob": "09563913085d402a7a111368812fd89837cf5606"
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/zero_manual.py",
@@ -3244,9 +3292,9 @@
     },
     {
       "path": "自定义人物绑定插件/使用说明.md",
-      "bytes": 9284,
-      "sha256": "b1624e1843223a4665f1b7ece92006877af34fc97f2384f32408cdff03c78d50",
-      "git_blob": "b954bcd74675e8cc2266e4b1baac75e36fc42a68"
+      "bytes": 10081,
+      "sha256": "31065061960b63c3440e4d5a95e139a287526017b48c907ec2a1cec437c83a77",
+      "git_blob": "8b23e3ef53bb36cf7109b1753a67a0277dc71edb"
     },
     {
       "path": "自定义人物绑定插件/安装手机互通.py",

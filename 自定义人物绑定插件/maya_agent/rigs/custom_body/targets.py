@@ -62,6 +62,9 @@ def inspect(names, allow_animation=False, minimum_count=2, allow_parent_drivers=
                              'scalePivot', 'scalePivotTranslate', 'rotateOrder', 'jointOrient'):
                     if c.attributeQuery(attr, node=ancestor, exists=True) and c.listConnections(
                             ancestor + '.' + attr, source=True, destination=False):
+                        if (attr == 'rotateOrder' and compatible_inputs
+                                and _static_rotate_order(ancestor + '.' + attr)):
+                            continue
                         raise ValueError('动画转移暂不支持剪切、轴向、轴心或旋转顺序动画：' + ancestor + '.' + attr)
                 # Compound plugs may not enumerate incoming child connections in Maya.
                 for attr in ('shear','rotateAxis','rotatePivot','rotatePivotTranslate',
@@ -92,6 +95,46 @@ def inspect(names, allow_animation=False, minimum_count=2, allow_parent_drivers=
     if any(length < 1e-5 for length in lengths):
         raise ValueError('相邻目标位置重合，无法确定骨骼长度；请调整选择顺序或目标位置。')
     return samples, sum(lengths)
+
+
+def _static_rotate_order(plug):
+    """Prove a stored order setting through direct links; never sample to guess.
+
+    Only transform/joint order plugs and scalar user settings on ordinary
+    transforms, joints or network nodes are accepted. Computed outputs, time
+    curves (even constant ones), expressions and cycles remain unsupported.
+    The original setting and every connection are left intact.
+    """
+    import maya.cmds as c
+    seen = set()
+    for _ in range(64):
+        node, attr = plug.split('.', 1)
+        matches = c.ls(node, long=True) or []
+        if len(matches) != 1 or '.' in attr or '[' in attr:
+            return False
+        node = matches[0]
+        plug = node + '.' + attr
+        if plug in seen:
+            return False
+        seen.add(plug)
+        kind = c.nodeType(node)
+        if kind not in ('transform', 'joint', 'network'):
+            return False
+        if not ((attr == 'rotateOrder' and kind in ('transform', 'joint'))
+                or attr in (c.listAttr(node, userDefined=True) or [])):
+            return False
+        if (not c.attributeQuery(attr, node=node, writable=True)
+                or not c.attributeQuery(attr, node=node, storable=True)
+                or c.getAttr(plug, type=True) not in ('enum', 'byte', 'short', 'long', 'float', 'double')):
+            return False
+        source = c.listConnections(plug, source=True, destination=False, plugs=True) or []
+        if not source:
+            value = c.getAttr(plug)
+            return isinstance(value, (int, float)) and math.isfinite(value) and value in range(6)
+        if len(source) != 1:
+            return False
+        plug = source[0]
+    return False
 
 
 def _time_curve_input(plugs):

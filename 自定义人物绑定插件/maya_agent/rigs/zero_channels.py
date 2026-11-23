@@ -218,6 +218,14 @@ def begin(control, translation_routes=None):
         return arm_ik_shared.begin(d['root'],role=d['role'])
     if c.objExists(source+'.liveInput'):
         source=(c.listConnections(source+'.liveInput',s=True,d=False) or [source])[0]
+    # A crash-recovery file can contain the temporary disconnected state of a
+    # native gesture. Validate every channel before isolating any input so a
+    # missing later channel cannot leave an earlier one partially edited.
+    input_edges={source+'.'+attr:c.connectionInfo(source+'.'+attr,sfd=True)
+                 for attr in d['offsets']}
+    missing=[plug for plug,edge in input_edges.items() if not edge]
+    if missing:
+        raise ValueError('控制器内部输入连接已断开，需保姿态修复后再操作：'+', '.join(missing))
     snapshot=live_edit._snapshot([control+'.'+a for a in d['offsets']])
     fk_pole=(d['part'].startswith('arm') and d['role']=='pole_locator' and
              c.objExists(d['root']+'.liveAlignmentData'))
@@ -238,7 +246,7 @@ def begin(control, translation_routes=None):
         display=om.MMatrix(c.xform(control,q=True,ws=True,m=True))
         entry['input_basis']=live_edit._frame(source)*display.inverse()
         for attr in d['offsets']:
-            p=control+'.'+attr;dst=source+'.'+attr;edge=c.connectionInfo(dst,sfd=True)
+            p=control+'.'+attr;dst=source+'.'+attr;edge=input_edges[dst]
             value=c.getAttr(dst);c.disconnectAttr(edge,dst);c.setAttr(dst,value)
             entry['edges'].append((p,dst));entry.setdefault('input_edges',{})[dst]=edge
             incoming=c.connectionInfo(p,sfd=True)

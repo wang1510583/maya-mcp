@@ -11,9 +11,11 @@ def ordered_selection():
     return c.ls(orderedSelection=True, long=True) or []
 
 
-def inspect(names, allow_animation=False, minimum_count=2, allow_parent_drivers=False):
+def inspect(names, allow_animation=False, minimum_count=2, allow_parent_drivers=False, compatible_inputs=False):
     import maya.cmds as c
     import maya.api.OpenMaya as om
+    if compatible_inputs and not allow_animation:
+        raise ValueError('兼容已有驱动必须先采样原运动。')
     if not isinstance(names, (list, tuple)) or not minimum_count <= len(names) <= 64:
         raise ValueError('选择模式需要 2–64 个物体；列表第一项是腰部，最后一项是胸部。')
     samples, seen = [], set()
@@ -21,7 +23,7 @@ def inspect(names, allow_animation=False, minimum_count=2, allow_parent_drivers=
         if not isinstance(name, str) or '.' in name:
             raise ValueError('请选物体或骨骼，不要选择顶点等组件。')
         matches = c.ls(name, long=True) or []
-        if len(matches) != 1 or c.nodeType(matches[0]) not in ('transform', 'joint'):
+        if len(matches) != 1 or not c.objectType(matches[0], isAType='transform'):
             raise ValueError('目标不存在、重名或不是 transform / joint：' + name)
         node = matches[0]
         if node in seen:
@@ -37,7 +39,7 @@ def inspect(names, allow_animation=False, minimum_count=2, allow_parent_drivers=
             plug = node + '.' + channel
             # Maya reports animated channels as settable; check each incoming plug explicitly.
             incoming = c.listConnections(plug, source=True, destination=False, plugs=True) or []
-            if (c.getAttr(plug, lock=True) or not c.getAttr(plug, settable=True)
+            if not compatible_inputs and (c.getAttr(plug, lock=True) or not c.getAttr(plug, settable=True)
                     or (incoming and not (allow_animation and _time_curve_input(incoming)))):
                 raise ValueError('目标通道已锁定或已有动画/连接，未覆盖：' + plug)
         ancestor = node
@@ -48,13 +50,13 @@ def inspect(names, allow_animation=False, minimum_count=2, allow_parent_drivers=
             keep_parent_driver = allow_parent_drivers and allow_animation and ancestor != node
             for attr in ('translate', 'rotate', 'offsetParentMatrix') + CHANNELS:
                 incoming = c.listConnections(ancestor + '.' + attr, source=True, destination=False, plugs=True) or []
-                if incoming and not keep_parent_driver and not (allow_animation and attr != 'offsetParentMatrix' and _time_curve_input(incoming)):
+                if incoming and not compatible_inputs and not keep_parent_driver and not (allow_animation and attr != 'offsetParentMatrix' and _time_curve_input(incoming)):
                     raise ValueError('目标或父级已有动画/驱动连接，未覆盖：' + ancestor + '.' + attr)
             if allow_animation:
                 # Scale stays on the original objects; ordinary keyed scale is not a TR conflict.
                 for attr in ('scale', 'scaleX', 'scaleY', 'scaleZ'):
                     incoming = c.listConnections(ancestor + '.' + attr, source=True, destination=False, plugs=True) or []
-                    if incoming and not _time_curve_input(incoming):
+                    if incoming and not compatible_inputs and not _time_curve_input(incoming):
                         raise ValueError('缩放暂只支持普通时间关键帧输入：' + ancestor + '.' + attr)
                 for attr in ('shear', 'rotateAxis', 'rotatePivot', 'rotatePivotTranslate',
                              'scalePivot', 'scalePivotTranslate', 'rotateOrder', 'jointOrient'):
@@ -81,7 +83,8 @@ def inspect(names, allow_animation=False, minimum_count=2, allow_parent_drivers=
         position = c.xform(node, query=True, worldSpace=True, translation=True)
         if not all(math.isfinite(v) for v in position + list(matrix)):
             raise ValueError('目标变换不是有限数值：' + node)
-        samples.append({'node': node, 'position': position,
+        from maya_agent.rigs.rotation_limits import snapshot as snapshot_limits
+        samples.append({'node': node, 'position': position, 'rotation_limits': snapshot_limits(node),
                         'rotation': [math.degrees(v) for v in (euler.x, euler.y, euler.z)],
                         'matrix': list(rotation.asMatrix()), 'world_matrix': list(matrix),
                         'channels': {attr: c.getAttr(node + '.' + attr) for attr in CHANNELS}})
@@ -132,6 +135,8 @@ def connect(ctx, samples):
 
 def restore(samples):
     import maya.cmds as c
+    from maya_agent.rigs.rotation_limits import restore as restore_limits
+    restore_limits(samples)
     for sample in samples:
         if c.objExists(sample['node']):
             for attr, value in sample['channels'].items():

@@ -289,6 +289,8 @@ def before_drag(context):
     generic=zero_channels.selected_generic()
     if not roots and not generic:return
     if _gesture:after_drag(context)
+    from . import input_recovery
+    input_recovery.before_gesture(generic)
     c.undoInfo(openChunk=True,chunkName='LiveLimbTransform')
     _gesture={'snapshots':[],'prepared':{},'auto':c.autoKeyframe(q=True,state=True),'rotation_layers':[], 'arm_gestures':[]}
     try:

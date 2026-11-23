@@ -26,6 +26,10 @@ def build():
     ], check=True)
     records = []
     for path in sorted(DESTINATION.rglob('*')):
+        # Extracting the distribution into its own folder can leave an older
+        # nested package. Keep that user copy on disk, but never distribute it.
+        if path.relative_to(DESTINATION).parts[0] in (DESTINATION.name, 'outputs'):
+            continue
         if not path.is_file() or '__pycache__' in path.parts or path.name == 'manifest.json':
             continue
         if path.suffix in ('.pyc', '.pyo'):
