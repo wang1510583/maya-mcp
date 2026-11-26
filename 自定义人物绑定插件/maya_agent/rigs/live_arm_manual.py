@@ -80,9 +80,10 @@ def begin(root,role,_setup=None):
             # curves. Retain this pose and interpret the gesture as a world delta.
             snapshot=exc.snapshot;aligned=False;_record_fallback(exc,'begin')
     from . import zero_channels
+    from .live_alignment import protected_inputs
     proxy=zero_channels.surface(data['controls'][role]);source=data['inputs'][role]
     entry=dict(data=data,role=role,mode=mode,snapshot=snapshot,proxy=proxy,source=source,
-               edges=[],curve_edges=[],changed=False,finished=False)
+               edges=[],curve_edges=[],input_locks=set(),changed=False,finished=False)
     entry['setup']=(snapshot,aligned)
     entry['destinations']={e['source']:e['proxy'] for e in data['entries']}
     try:
@@ -90,16 +91,19 @@ def begin(root,role,_setup=None):
         entry['input_basis']=om.MMatrix() if aligned else _frame(source)*display.inverse()
         # A multi-object rotation about a shared pivot also changes translation.
         entry['native_attrs']=TR
+        protected=protected_inputs(data)
         for attr in TR:
             src=proxy+'.'+attr;dst=source+'.'+attr
             actual=c.connectionInfo(dst,sfd=True)
             expected=data['controls'][role]+'.'+attr
+            protected_source=protected.get(expected)
+            if protected_source and not c.isConnected(protected_source,expected):
+                raise ValueError('手臂通道连接已被修改：'+expected)
             if not c.isConnected(expected,dst):
                 if not c.getAttr(src,lock=True):raise ValueError('手臂通道连接已被修改：'+dst)
                 continue
-            value=c.getAttr(dst);c.disconnectAttr(actual,dst);c.setAttr(dst,value)
-            entry.setdefault('input_edges',{})[dst]=actual
-            entry['edges'].append((src,dst));entry['destinations'][dst]=dst
+            isolate_input(entry,src,dst,actual,protected.get(dst)==expected)
+            entry['destinations'][dst]=dst
         for attr in TR:
             plug=proxy+'.'+attr
             if c.getAttr(plug,lock=True):continue
@@ -121,9 +125,11 @@ def begin(root,role,_setup=None):
         prepare_native_sample(entry,suspend=False)
         return entry
     except Exception:
-        if entry.get('display_edge'):restore_display(entry)
-        for incoming,plug in entry['curve_edges']:c.connectAttr(incoming,plug,force=True)
-        for src,dst in entry['edges']:c.connectAttr(entry.get('input_edges',{}).get(dst,src),dst,force=True)
+        try:
+            if entry.get('display_edge'):restore_display(entry)
+            for incoming,plug in entry['curve_edges']:c.connectAttr(incoming,plug,force=True)
+        finally:
+            _restore_inputs(entry)
         _restore(snapshot)
         raise
 
@@ -231,14 +237,42 @@ def update(entry,force=False,_restore_display=True):
         if _restore_display:restore_display(entry)
 
 
+def isolate_input(entry,source,destination,driver,protected):
+    """Temporarily give a native gesture a registered solver input."""
+    import maya.cmds as c
+    value=c.getAttr(destination)
+    if protected:
+        entry['input_locks'].add(destination)
+        c.setAttr(destination,lock=False)
+    c.disconnectAttr(driver,destination)
+    entry.setdefault('input_edges',{})[destination]=driver
+    entry['edges'].append((source,destination))
+    c.setAttr(destination,value)
+
+
+def _restore_inputs(entry):
+    import maya.cmds as c
+    try:
+        for src,dst in entry['edges']:
+            original=entry.get('input_edges',{}).get(dst,src)
+            if not c.isConnected(original,dst):c.connectAttr(original,dst,force=True)
+    finally:
+        for dst in entry.get('input_locks',()):c.setAttr(dst,lock=True)
+
+
 def _reconnect(entry,values):
     import maya.cmds as c
     from .zero_channels import offset
     if entry.get('shared_ik'):
         from .arm_ik_shared import reconnect
         reconnect(entry);return
-    for src,dst in entry['edges']:
-        c.setAttr(src,values[src]-offset(src));c.connectAttr(entry.get('input_edges',{}).get(dst,src),dst,force=True)
+    try:
+        for src,dst in entry['edges']:
+            c.setAttr(src,values[src]-offset(src))
+            original=entry.get('input_edges',{}).get(dst,src)
+            if not c.isConnected(original,dst):c.connectAttr(original,dst,force=True)
+    finally:
+        _restore_inputs(entry)
     for incoming,plug in entry['curve_edges']:
         c.connectAttr(incoming,plug,force=True)
     for plug,dst in entry['edges']:c.setAttr(plug,values[plug]-offset(plug))

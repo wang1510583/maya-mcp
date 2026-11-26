@@ -20,6 +20,8 @@ def repair(control):
     missing=[a for a in d['offsets'] if not c.connectionInfo(source+'.'+a,sfd=True)]
     if not missing:return None
     registry=scene_data.read(root+'.liveAlignmentData')
+    from .live_alignment import protected_inputs
+    protected=protected_inputs(registry)
     def same(a,b):return bool(a and b and c.ls(a,long=True)) and c.ls(a,long=True)==c.ls(b,long=True)
     if (not same(registry['controls'].get(d['role'],''),live)
             or not same(registry['inputs'].get(d['role'],''),source)):
@@ -71,9 +73,12 @@ def repair(control):
         c.dgdirty(nodes,allPlugs=True)
         error=max(abs(a-b) for n,m in poses.items() for a,b in zip(m,c.xform(n,q=True,ws=True,m=True)))
         if error>1e-5:raise RuntimeError('恢复输入未能保留姿态，已回退：'+control)
+        for row in done:
+            if row['dst'] in protected:c.setAttr(row['dst'],lock=True)
         return dict(control=control,connections=len(rows),max_pose_error=error)
     except Exception:
         for row in reversed(done):
+            if c.getAttr(row['dst'],lock=True):c.setAttr(row['dst'],lock=False)
             c.disconnectAttr(row['expected'],row['dst']);c.setAttr(row['dst'],row['value'])
         for row in rows:c.setAttr(row['offset'],row['old'])
         c.setAttr(control+'.zeroChannelData',lock=False)

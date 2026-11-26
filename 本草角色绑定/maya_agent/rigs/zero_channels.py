@@ -38,6 +38,48 @@ def absolute(plug,value):
     target=resolve(plug);c.setAttr(target,value-offset(target))
 
 
+def protect_inputs(part, roles):
+    """Lock registered zero relays that feed the solver directly."""
+    import maya.cmds as c
+    for role, control in part.get('zero_controls', {}).items():
+        if role not in roles or not c.objExists(control + '.zeroChannelData'):
+            continue
+        info = control + '.zeroChannelData'
+        data = scene_data.read(info)
+        edges = registered_inputs(data)
+        for plug, expected in edges.items():
+            if not c.isConnected(expected, plug):
+                raise ValueError('无法保护控制器输入：' + plug)
+        for plug in edges:
+            c.setAttr(plug, lock=True)
+        data['protectInputs'] = True
+        c.setAttr(info, lock=False)
+        c.setAttr(info, json.dumps(data), type='string', lock=True)
+
+
+def registered_inputs(data):
+    return {data['source'] + '.' + attr: edge for attr, edge in data['edges'].items()}
+
+
+def protected_gesture_inputs(data, source):
+    """Read protection for this control's relay and its optional limb input."""
+    import maya.cmds as c
+    from .live_alignment import protected_inputs
+    edges=registered_inputs(data) if data.get('protectInputs') else {}
+    registry=data['root']+'.liveAlignmentData'
+    if c.objExists(registry):
+        edges.update({p:e for p,e in protected_inputs(scene_data.read(registry)).items()
+                      if p.rsplit('.',1)[0] in (source,data['source'])})
+    return edges
+
+
+def validate_gesture_inputs(edges):
+    import maya.cmds as c
+    for dst,expected in edges.items():
+        if not c.objExists(expected) or not c.isConnected(expected,dst):
+            raise ValueError('控制器内部输入连接已被修改：'+dst)
+
+
 def build(rig):
     """Only for freshly built rigs, before user edits or animation layers."""
     import maya.cmds as c
@@ -226,6 +268,8 @@ def begin(control, translation_routes=None):
     missing=[plug for plug,edge in input_edges.items() if not edge]
     if missing:
         raise ValueError('控制器内部输入连接已断开，需保姿态修复后再操作：'+', '.join(missing))
+    protected=protected_gesture_inputs(d,source)
+    validate_gesture_inputs(protected)
     snapshot=live_edit._snapshot([control+'.'+a for a in d['offsets']])
     fk_pole=(d['part'].startswith('arm') and d['role']=='pole_locator' and
              c.objExists(d['root']+'.liveAlignmentData'))
@@ -240,15 +284,14 @@ def begin(control, translation_routes=None):
             nodes=list(dict.fromkeys([n for n,m in frames+restore]+zero))
             snapshot=live_edit._snapshot([destinations.get(n+'.'+a,n+'.'+a) for n in nodes for a in TR])
     entry=dict(data={'root':d['root']},role=d['role'],mode=c.contextInfo(c.currentCtx(),c=True),snapshot=snapshot,
-               proxy=control,source=source,edges=[],curve_edges=[],changed=False,finished=False,
+               proxy=control,source=source,edges=[],curve_edges=[],input_locks=set(),changed=False,finished=False,
                generic_zero=True,fk_pole=fk_pole,destinations={},input_basis=om.MMatrix(),native_attrs=TR)
     try:
         display=om.MMatrix(c.xform(control,q=True,ws=True,m=True))
         entry['input_basis']=live_edit._frame(source)*display.inverse()
         for attr in d['offsets']:
             p=control+'.'+attr;dst=source+'.'+attr;edge=input_edges[dst]
-            value=c.getAttr(dst);c.disconnectAttr(edge,dst);c.setAttr(dst,value)
-            entry['edges'].append((p,dst));entry.setdefault('input_edges',{})[dst]=edge
+            live_arm_manual.isolate_input(entry,p,dst,edge,dst in protected)
             incoming=c.connectionInfo(p,sfd=True)
             if incoming:
                 value=c.getAttr(p);c.disconnectAttr(incoming,p);c.setAttr(p,value);entry['curve_edges'].append((incoming,p))
@@ -275,6 +318,9 @@ def begin(control, translation_routes=None):
         live_arm_manual.prepare_native_sample(entry,suspend=False)
         return entry
     except Exception:
-        if entry.get('display_edge'):live_arm_manual.restore_display(entry)
-        live_arm_manual._reconnect(entry,{p:c.getAttr(dst) for p,dst in entry['edges']})
+        try:
+            if entry.get('display_edge'):live_arm_manual.restore_display(entry)
+            live_arm_manual._reconnect(entry,{p:c.getAttr(dst) for p,dst in entry['edges']})
+        finally:
+            live_arm_manual._restore_inputs(entry)
         live_edit._restore(snapshot);raise

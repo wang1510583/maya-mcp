@@ -397,6 +397,15 @@ def build(parts,namespace='customCharacter',general_root=None,chest_follow=None,
                         raise RuntimeError('{}最终动画核对失败，帧 {}，误差 {}，容差 {}'.format(PARTS[key]['label'],f,delta,pose_tolerance))
                     result['max_world_error']=max(result['max_world_error'],delta)
         c.currentTime(frame)
+        if zero_controls:
+            from maya_agent.rigs import live_alignment
+            from maya_agent.rigs.zero_channels import protect_inputs
+            for key,part in built.items():
+                live_alignment.protect_inputs(part)
+                if key in ('body','head'):
+                    protect_inputs(part, part.get('zero_controls',{}))
+                elif PARTS[key]['kind']=='leg':
+                    protect_inputs(part, ('knee',))
         c.addAttr(root,ln='integratedRigData',dt='string')
         c.setAttr(root+'.integratedRigData',json.dumps(result,ensure_ascii=False),type='string',lock=True)
         return result

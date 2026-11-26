@@ -1,6 +1,6 @@
 {
-  "assistant_version": "1.0.7",
-  "source_version": "1.27.2",
+  "assistant_version": "1.0.10",
+  "source_version": "1.27.6",
   "files": [
     {
       "path": "maya_agent/__init__.py",
@@ -159,8 +159,8 @@
     },
     {
       "path": "maya_agent/rigs/custom_body/targets.py",
-      "bytes": 9003,
-      "sha256": "34562fcef883d7be55576b207860ea9ec1533f81fb1108c5fa99af83c1278a4a"
+      "bytes": 10879,
+      "sha256": "9d67e20a538285ba16f51d5ca69921c056d4e7d1c75a292f3d7cf809c0e2eacd"
     },
     {
       "path": "maya_agent/rigs/custom_body/topology.py",
@@ -194,8 +194,8 @@
     },
     {
       "path": "maya_agent/rigs/foot_translation.py",
-      "bytes": 6758,
-      "sha256": "58bac3ecef3c40cc36d60f66104d15954ffad630bdc9b7b7b53c80943c061664"
+      "bytes": 6832,
+      "sha256": "d73fe57b3cb8f53f49ffc516bee31b0e5258154e73fd2053dd9258f8a7222ea2"
     },
     {
       "path": "maya_agent/rigs/head_knee_space.py",
@@ -209,13 +209,13 @@
     },
     {
       "path": "maya_agent/rigs/input_recovery.py",
-      "bytes": 5636,
-      "sha256": "05871e9ead8c0df38bf2a19ff0cfb0b02b91304d6cb73183c5376223f79f8524"
+      "bytes": 5902,
+      "sha256": "fc9ba3875dd8631a2957ff72a4bff19c34316555ae031888b499ed1f7a88f925"
     },
     {
       "path": "maya_agent/rigs/integrated/__init__.py",
       "bytes": 1319,
-      "sha256": "76a102e7cad5867cda35d9503f4d389cd299b035e580be57d313023b309c127e"
+      "sha256": "11e2e7aae4e32ab6d064d667191944f233053043570069d227e7666f5ffa7a86"
     },
     {
       "path": "maya_agent/rigs/integrated/attachments.py",
@@ -224,8 +224,8 @@
     },
     {
       "path": "maya_agent/rigs/integrated/builder.py",
-      "bytes": 26859,
-      "sha256": "969ade4408a3b099dad89d575e78f00c94d45d6baf8af15926492d7eaae8f728"
+      "bytes": 27327,
+      "sha256": "b2a371bc8f4aeb4fde1985ff4b8e487842cbf0878655e852cdb1fdd478cdc34b"
     },
     {
       "path": "maya_agent/rigs/integrated/display.py",
@@ -294,8 +294,8 @@
     },
     {
       "path": "maya_agent/rigs/live_alignment.py",
-      "bytes": 25860,
-      "sha256": "77520e522618911c46c7b583a737805c39a8fb962d727b2ad4b53d46c4310851"
+      "bytes": 27271,
+      "sha256": "7465c9c0c11191b92d8150d09d50c4c6040691c1206a6f51fafddeb4290968a3"
     },
     {
       "path": "maya_agent/rigs/live_arm_fk.py",
@@ -304,8 +304,8 @@
     },
     {
       "path": "maya_agent/rigs/live_arm_manual.py",
-      "bytes": 13310,
-      "sha256": "95822e59aa4ae9de7200c3eb446aeb040ba7eaf9ac162bbfbab871c9378464aa"
+      "bytes": 14454,
+      "sha256": "464a0d1d39ef1233ab9ffcaf6be8ffa9cbe646a1bbbe9bd727583c174a1a4317"
     },
     {
       "path": "maya_agent/rigs/live_edit.py",
@@ -339,8 +339,8 @@
     },
     {
       "path": "maya_agent/rigs/reference_animation.py",
-      "bytes": 4892,
-      "sha256": "4563a02167ce33a7c8d2cfcb822cac207f5e044ecbfad71de8eaf863fc7b3af6"
+      "bytes": 5032,
+      "sha256": "4117cb37ed909f51bcd76969d09366ce4dc1e06d396b4a32fb0e16a6aee9c77d"
     },
     {
       "path": "maya_agent/rigs/rotation_limits.py",
@@ -449,18 +449,18 @@
     },
     {
       "path": "maya_agent/rigs/zero_channels.py",
-      "bytes": 17664,
-      "sha256": "bac86cd7dd5b4eac2fb4304379fa37aa1eb0ee54b5162fbc2d4d8e8801a6666e"
+      "bytes": 19505,
+      "sha256": "88e61e887341c0a241dedaacf158ccc299c962ec02fd7b72c223593471fd6332"
     },
     {
       "path": "maya_agent/rigs/zero_manual.py",
-      "bytes": 4891,
-      "sha256": "904f31c93be485c3e77a87f5a3ef9197cadac9b411dd921746d6a4234d8ec50e"
+      "bytes": 5751,
+      "sha256": "cc96dbc70f3e79cc78cf1487da4b383d232145710daf2aa5afcb952419d47491"
     },
     {
       "path": "rig_runtime_assistant.py",
-      "bytes": 6218,
-      "sha256": "b2dfef39bd5a3dbc79c3c8d4a843cbc797c58be098d823a65776c5cf4ade8417"
+      "bytes": 6219,
+      "sha256": "aab6cae3170a1a0f2faeaa2ed272cc683d9c1806476cf77a12b7d2f0011a7503"
     },
     {
       "path": "安装本草角色绑定.py",
@@ -469,8 +469,8 @@
     },
     {
       "path": "给动画师的使用说明.md",
-      "bytes": 5889,
-      "sha256": "631a40c9bcfcae4c57c23ed4d95734e11812ad2ae84ab9b799f7d55397353f13"
+      "bytes": 6463,
+      "sha256": "3fdf04d285f07ee6b293d884d0dcf4c9ddec9e205924100603ce3720ba215b14"
     }
   ]
 }

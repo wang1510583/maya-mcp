@@ -26,9 +26,12 @@ def _plugs():
                 seen.add(plug);selection=om.MSelectionList();selection.add(plug)
                 if not om.MFnAttribute(selection.getPlug(0).attribute()).isProxyAttribute:break
                 source=c.connectionInfo(plug,sfd=True)
-                if not source:break
+                if not source:
+                    # Deleted rig inputs leave proxy attributes without values.
+                    plug=None
+                    break
                 plug=source
-            if not c.getAttr(plug,lock=True):plugs.add(plug)
+            if plug and not c.getAttr(plug,lock=True):plugs.add(plug)
     return plugs
 
 

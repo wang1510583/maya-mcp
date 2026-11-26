@@ -32,7 +32,8 @@ def run():
                 for f,d in ((1,0),(4,.2),(9.5,-.1)):c.setKeyframe(ctrl,at=a,t=f,v=v+d)
             c.currentTime(4);curves=keys(ctrl)
             for a in zero_channels.TR:
-                value=c.getAttr(source+'.'+a);c.disconnectAttr(live+'.'+a,source+'.'+a);c.setAttr(source+'.'+a,value)
+                value=c.getAttr(source+'.'+a);c.setAttr(source+'.'+a,lock=False)
+                c.disconnectAttr(live+'.'+a,source+'.'+a);c.setAttr(source+'.'+a,value)
             c.setAttr(source+'.ty',c.getAttr(source+'.ty')+.4)
             c.setAttr(source+'.rx',c.getAttr(source+'.rx')+7)
             c.dgdirty(allPlugs=True);c.refresh(force=True)
@@ -53,10 +54,12 @@ def run():
             c.select(ctrl,r=True);c.setToolTo('moveSuperContext')
             live_edit.before_drag('recovery-regression');live_edit.after_drag('recovery-regression')
             assert all(c.isConnected(live+'.'+a,source+'.'+a) for a in zero_channels.TR)
+            assert all(c.getAttr(source+'.'+a,lock=True) for a in zero_channels.TR)
             assert error(baseline)<1e-5 and keys(ctrl)==curves
             assert input_recovery.repair(ctrl) is None
             reports.append(dict(side=key,automatic_recovery=True,rollback=True,sparse_keys_unchanged=True,pose_error=error(baseline)))
             # A registered input replaced by another driver is never overwritten.
+            for a in ('translateX','translateY','rotateZ'):c.setAttr(source+'.'+a,lock=False)
             c.disconnectAttr(live+'.translateX',source+'.translateX')
             c.disconnectAttr(live+'.translateY',source+'.translateY')
             external=c.createNode('addDoubleLinear',name=prefix+'_external')

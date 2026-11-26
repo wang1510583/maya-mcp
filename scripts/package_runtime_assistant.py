@@ -27,7 +27,7 @@ def build():
     tree=ast.parse(payload['maya_agent/rigs/integrated/__init__.py'])
     version=next(ast.literal_eval(n.value) for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='VERSION' for t in n.targets))
     records=[dict(path=n,bytes=len(b),sha256=hashlib.sha256(b).hexdigest()) for n,b in sorted(payload.items())]
-    manifest=dict(assistant_version='1.0.7',source_version=version,files=records)
+    manifest=dict(assistant_version='1.0.10',source_version=version,files=records)
     payload['manifest.json']=json.dumps(manifest,ensure_ascii=False,indent=2).encode('utf-8')
     DEST.mkdir(exist_ok=True)
     # Remove only previously generated manifest entries, never unrelated files.

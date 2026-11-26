@@ -25,6 +25,45 @@ def _arm_channel_policy(data):
             c.setAttr(data['controls'][role]+'.translate'+axis,keyable=True)
 
 
+def protected_inputs(data):
+    """Read the input ownership recorded by both generations of the builder."""
+    return data.get('protectedInputs', data.get('protectedRotations', {}))
+
+
+def protect_inputs(part):
+    """Keep the two hidden limb stages out of Maya's animation write targets."""
+    import maya.cmds as c
+    from .zero_channels import surface
+    from .live_edit import TR
+
+    data = part.get('live_alignment')
+    if not data:
+        return
+    edges = {}
+    for entry in data['entries']:
+        plug = entry['source']
+        if plug.rsplit('.', 1)[-1] in TR:
+            edges[plug] = entry['proxy']
+    for proxy in data['controls'].values():
+        visible = surface(proxy)
+        if visible == proxy:
+            continue
+        inputs = scene_data.read(visible + '.zeroChannelData')['edges']
+        for attr in TR:
+            if attr in inputs:
+                edges[proxy + '.' + attr] = inputs[attr]
+    for plug, expected in edges.items():
+        if not c.isConnected(expected, plug):
+            raise ValueError('无法保护实时肢体输入：' + plug)
+    for plug in edges:
+        c.setAttr(plug, lock=True)
+    data.pop('protectedRotations', None)
+    data['protectedInputs'] = edges
+    info = data['root'] + '.liveAlignmentData'
+    c.setAttr(info, lock=False)
+    c.setAttr(info, json.dumps(data), type='string', lock=True)
+
+
 def _frame(node, create, pivot_source=None):
     import maya.cmds as c
     compose=create('composeMatrix','pivot')

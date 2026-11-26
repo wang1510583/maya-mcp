@@ -26,7 +26,7 @@ def key_plugs(controls):
 
 def attach(entry, data, routes):
     import maya.cmds as c
-    from . import live_edit
+    from . import live_edit,live_arm_manual,zero_channels
     moving=entry['mode']=='manipMove'
     rotating=entry['mode']=='manipRotate'
     roles=ROLES if moving else ROTATION_ROLES if rotating else ()
@@ -44,7 +44,8 @@ def attach(entry, data, routes):
         proxy, source = entry['proxy'], entry['source']
     else:
         proxy = scene_data.read(root + '.zeroPartData')['controls']['foot']
-        source = scene_data.read(proxy + '.zeroChannelData')['source']
+        ankle_data = scene_data.read(proxy + '.zeroChannelData')
+        source = ankle_data['source']
         if c.objExists(source + '.liveInput'):
             source = (c.listConnections(source + '.liveInput', s=True, d=False) or [source])[0]
         plugs = [proxy + '.translate' + axis for axis in 'XYZ']
@@ -54,16 +55,14 @@ def attach(entry, data, routes):
         snapshot = live_edit._snapshot(plugs)
         entry['snapshot'][0].update(snapshot[0])
         entry['snapshot'][1].update(snapshot[1])
+        protected=zero_channels.protected_gesture_inputs(ankle_data,source)
+        zero_channels.validate_gesture_inputs(protected)
         for p in plugs:
             dst = source + '.' + p.rsplit('.', 1)[1]
             edge = c.connectionInfo(dst, sfd=True)
             if not edge:
                 raise ValueError('脚腕位移输入未连接：' + dst)
-            value = c.getAttr(dst)
-            c.disconnectAttr(edge, dst)
-            c.setAttr(dst, value)
-            entry['edges'].append((p, dst))
-            entry['input_edges'][dst] = edge
+            live_arm_manual.isolate_input(entry,p,dst,edge,dst in protected)
             incoming = c.connectionInfo(p, sfd=True)
             if incoming:
                 value = c.getAttr(p)
