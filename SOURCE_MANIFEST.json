@@ -1,5 +1,5 @@
 {
-  "core_version": "1.27.6",
+  "core_version": "1.28.6",
   "assistant_version": "1.0.10",
   "files": [
     {
@@ -46,9 +46,9 @@
     },
     {
       "path": "README.md",
-      "bytes": 7810,
-      "sha256": "35eb15cccc1755b84e778bee6dee72d76c9737c31402115031c1fd1b882bccd3",
-      "git_blob": "9042ec64e0b902c03afc0d3ad67c89215cd106f0"
+      "bytes": 7985,
+      "sha256": "cc2241921fa9cc68b37996c58215d72fef3b3d59ecc64b4d40bd88530e0c22ad",
+      "git_blob": "831ce7b278089ad45373bd57c3f6729f090aa2fe"
     },
     {
       "path": "SHA256SUMS.txt",
@@ -2452,9 +2452,9 @@
     },
     {
       "path": "自定义人物绑定插件/manifest.json",
-      "bytes": 25756,
-      "sha256": "b74f7fe3471bc7dced288935a52eb9c0dfce8f912c03bde027714889f70ee7c9",
-      "git_blob": "6248f8e2627f0c636571f7b59c6c0901e81d4cc1"
+      "bytes": 25938,
+      "sha256": "4750cc30e6d5a99433efab4ef15971c66dbc98c00cf4f147c89084cc23e73543",
+      "git_blob": "ae23b4f1819c46e88cc66049543c3c3c85ba7301"
     },
     {
       "path": "自定义人物绑定插件/max_mcp/__init__.py",
@@ -2836,21 +2836,27 @@
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/integrated/README.md",
-      "bytes": 85890,
-      "sha256": "687c95080ed2256ad63b5664673b5ad6b52381e393021f1869cc873ab59f5513",
-      "git_blob": "5086fa05e926c846d9ccbbaa2bbe407d40c5ce1b"
+      "bytes": 87511,
+      "sha256": "2d1e78bce584c5bd9b3829c61c084693938e193c31b1f9399a75d5b8b779f7b3",
+      "git_blob": "3cbaed5191707d63003fe56018eb9a1c7a4af65d"
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/integrated/__init__.py",
       "bytes": 1319,
-      "sha256": "11e2e7aae4e32ab6d064d667191944f233053043570069d227e7666f5ffa7a86",
-      "git_blob": "8e2354c239dcaeb2ecb32aa5ce992d664261cbb7"
+      "sha256": "be4188aa56b15dc107e3934f2c9446aa3079fffab4a6aade269e42d7b8a16860",
+      "git_blob": "9126771fbfb2178aad097afecf1e5cac2beb31b6"
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/integrated/attachments.py",
       "bytes": 4183,
       "sha256": "72fcfd3c7ce5ab8f3b36312015f346f6945e2ce2d1fe6d16865510535d9616ba",
       "git_blob": "ea815a232b17691bce8eeda4961fea9e5cc7c7a7"
+    },
+    {
+      "path": "自定义人物绑定插件/maya_agent/rigs/integrated/box_preview.py",
+      "bytes": 19790,
+      "sha256": "4a62691676eb2a41e7ceba375f216844d3e3cd70b38c6a892f00054abea1bea0",
+      "git_blob": "ac80fa88e7d253970d380492f17ba0f81b10910e"
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/integrated/builder.py",
@@ -2938,9 +2944,9 @@
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/integrated/ui.py",
-      "bytes": 30227,
-      "sha256": "26214cac2feedd83b2fe64dbc314270fa3cfb2ad41aaa122bdf419a5e22b9e49",
-      "git_blob": "e5eab28bd8f87c914dd090e5872255696c62ea48"
+      "bytes": 31922,
+      "sha256": "62748af8845144cf278020c2add0a677ebb5f815f2d9af418e89998069ff2d28",
+      "git_blob": "ff11f9a08e93eb1651db96519081d4b53a8b4c2d"
     },
     {
       "path": "自定义人物绑定插件/maya_agent/rigs/key_companions.py",
@@ -3298,9 +3304,9 @@
     },
     {
       "path": "自定义人物绑定插件/使用说明.md",
-      "bytes": 10451,
-      "sha256": "1b0b273e9af112c4580117e84d0cb9737ad38a8de4c08467621e09f4d266b396",
-      "git_blob": "13b8c2c13e94568290b2a0e48bd97734b6198ca0"
+      "bytes": 10818,
+      "sha256": "10b66c2cd2e4e47e8e5017653747cd697857715aa3213dd3bf02f348790a5569",
+      "git_blob": "a4eab8153ab2a875f7153691b43a495ea3b9c0f6"
     },
     {
       "path": "自定义人物绑定插件/安装手机互通.py",

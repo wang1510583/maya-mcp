@@ -1,5 +1,5 @@
 {
-  "integrated_version": "1.27.6",
+  "integrated_version": "1.28.6",
   "body_version": "1.4.7",
   "files": [
     {
@@ -330,12 +330,17 @@
     {
       "path": "maya_agent/rigs/integrated/__init__.py",
       "bytes": 1319,
-      "sha256": "11e2e7aae4e32ab6d064d667191944f233053043570069d227e7666f5ffa7a86"
+      "sha256": "be4188aa56b15dc107e3934f2c9446aa3079fffab4a6aade269e42d7b8a16860"
     },
     {
       "path": "maya_agent/rigs/integrated/attachments.py",
       "bytes": 4183,
       "sha256": "72fcfd3c7ce5ab8f3b36312015f346f6945e2ce2d1fe6d16865510535d9616ba"
+    },
+    {
+      "path": "maya_agent/rigs/integrated/box_preview.py",
+      "bytes": 19790,
+      "sha256": "4a62691676eb2a41e7ceba375f216844d3e3cd70b38c6a892f00054abea1bea0"
     },
     {
       "path": "maya_agent/rigs/integrated/builder.py",
@@ -394,8 +399,8 @@
     },
     {
       "path": "maya_agent/rigs/integrated/README.md",
-      "bytes": 85890,
-      "sha256": "687c95080ed2256ad63b5664673b5ad6b52381e393021f1869cc873ab59f5513"
+      "bytes": 87511,
+      "sha256": "2d1e78bce584c5bd9b3829c61c084693938e193c31b1f9399a75d5b8b779f7b3"
     },
     {
       "path": "maya_agent/rigs/integrated/shoulder.py",
@@ -414,8 +419,8 @@
     },
     {
       "path": "maya_agent/rigs/integrated/ui.py",
-      "bytes": 30227,
-      "sha256": "26214cac2feedd83b2fe64dbc314270fa3cfb2ad41aaa122bdf419a5e22b9e49"
+      "bytes": 31922,
+      "sha256": "62748af8845144cf278020c2add0a677ebb5f815f2d9af418e89998069ff2d28"
     },
     {
       "path": "maya_agent/rigs/key_companions.py",
@@ -714,8 +719,8 @@
     },
     {
       "path": "使用说明.md",
-      "bytes": 10451,
-      "sha256": "1b0b273e9af112c4580117e84d0cb9737ad38a8de4c08467621e09f4d266b396"
+      "bytes": 10818,
+      "sha256": "10b66c2cd2e4e47e8e5017653747cd697857715aa3213dd3bf02f348790a5569"
     },
     {
       "path": "安装手机互通.py",

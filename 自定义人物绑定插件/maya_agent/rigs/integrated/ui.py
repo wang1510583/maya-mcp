@@ -155,6 +155,20 @@ class IntegratedWindow(QtWidgets.QDialog):
             from .master_control import upgrade_selected
             data=upgrade_selected();self.message('总控制圆环已就绪：W 移动、E 旋转；通道框“整体缩放”控制整个角色大小，1 为原大小。');return data
         master_button.clicked.connect(lambda:self.safe(add_master));layout.addWidget(master_button)
+        box_row=QtWidgets.QHBoxLayout()
+        box_button=QtWidgets.QPushButton('添加box简模',self)
+        box_button.setToolTip('选择角色控制器或角色根组，生成简模并显示。')
+        box_button.clicked.connect(lambda:self.safe(lambda:self.toggle_box_preview(add=True)))
+        box_row.addWidget(box_button)
+        switch_box_button=QtWidgets.QPushButton('切换简模显示',self)
+        switch_box_button.setToolTip('在该角色的简模与原模型之间切换显示。')
+        switch_box_button.clicked.connect(lambda:self.safe(self.toggle_box_preview))
+        box_row.addWidget(switch_box_button)
+        color_box_button=QtWidgets.QPushButton('修改简模颜色',self)
+        color_box_button.setToolTip('选择角色简模的 Box 材质颜色。')
+        color_box_button.clicked.connect(lambda:self.safe(self.color_box_preview))
+        box_row.addWidget(color_box_button)
+        layout.addLayout(box_row)
         panel_button=QtWidgets.QPushButton('创建 / 显示模式切换面板',self)
         panel_button.setToolTip('在已创建角色右侧生成场景滑块；选择圆圈后按 W，沿横轴拖动切换。')
         panel_button.clicked.connect(lambda:self.safe(self.create_switch_panel));layout.addWidget(panel_button)
@@ -362,6 +376,18 @@ class IntegratedWindow(QtWidgets.QDialog):
         panel=build_selected();c.select(panel['root'],r=True)
         self.message('模式切换面板已就绪：选圆圈，W 左右拖动；左 0、右 1。')
         return panel
+    def toggle_box_preview(self,add=False):
+        from .box_preview import add_selected,toggle_selected
+        result=add_selected() if add else toggle_selected()
+        text='已显示 Box 简模。使用「切换简模显示」可还原原模型。' if result['enabled'] else '已切回原模型。'
+        if result['skipped_meshes']:
+            text+=' 有 {} 个模型的可见性已锁定或受驱动，保留原显示。'.format(result['skipped_meshes'])
+        self.message(text)
+        return result
+    def color_box_preview(self):
+        from .box_preview import choose_selected_color
+        if choose_selected_color() is not None:
+            self.message('已应用到所选角色的简模。')
     def load_generic(self,key):
         names=c.ls(sl=True,l=True) or []
         if len(names)!=1 or c.nodeType(names[0]) not in ('transform','joint'):raise ValueError('请只选择一个物体。')
